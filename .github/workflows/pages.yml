@@ -5,12 +5,10 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'dist/**'
-      - 'example/**'
+      - 'src/**'
       - 'package.json'
       - 'rollup.config.js'
       - 'tsconfig.json'
-      - 'src/**'
   workflow_dispatch:
 
 permissions:
@@ -41,25 +39,26 @@ jobs:
       - name: Build library
         run: npm run build
 
-      - name: Copy files for GitHub Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Build static site
         run: |
           mkdir -p _site
-          # Copy docs (main page)
+          # Copy docs folder (main page)
           cp -r docs/* _site/
           # Copy built library
           cp -r dist/* _site/
           # Copy example files
           cp -r example/* _site/
-          # Copy source files for reference
+          # Copy source for reference
+          mkdir -p _site/src
           cp -r src/* _site/src/
-          # Copy configuration files
+          # Copy package files
           cp package.json _site/
           cp README.md _site/
           cp LICENSE _site/
           cp CHANGELOG.md _site/
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
