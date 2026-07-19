@@ -1,0 +1,118 @@
+name: QA Tests with Playwright
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'package.json'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
+
+jobs:
+  test:
+    name: Run QA Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Build library
+        run: npm run build
+
+      - name: Run Playwright tests
+        run: npx playwright test
+        env:
+          # Use GitHub Pages URL for tests
+          PLAYWRIGHT_BASE_URL: https://arcodange-org.github.io/sync-audio-js/
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: |
+            test-results/
+            playwright-report/
+
+      - name: Upload screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: test-results/**/*.png
+
+      - name: Upload videos
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-videos
+          path: test-results/**/*.webm
+
+  # Optional: Deploy test report as GitHub Pages
+  deploy-report:
+    name: Deploy Test Report
+    needs: test
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download test report
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-report/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Prepare report directory
+        run: |
+          mkdir -p _site/test-report
+          cp -r test-report/* _site/test-report/
+          # Add index page
+          cat > _site/test-report/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>SyncAudio QA Test Report</title>
+              <meta http-equiv="refresh" content="0; url=./html/index.html">
+          </head>
+          <body>
+              <p>Redirecting to <a href="./html/index.html">test report</a>...</p>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

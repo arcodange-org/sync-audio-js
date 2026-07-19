@@ -8,7 +8,10 @@
   "scripts": {
     "build": "rollup -c",
     "build:prod": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
     "lint": "eslint src/**/*.js --no-eslintrc --parser-options=ecmaVersion:2020,sourceType:module",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build",
@@ -16,16 +19,19 @@
     "dev": "node server.js",
     "serve": "npx serve .",
     "deploy:pages": "npm run build && mkdir -p _site && cp -r docs/* _site/ && cp -r dist/* _site/ && cp -r example/* _site/ && cp package.json _site/ && cp README.md _site/ && cp LICENSE _site/ && cp CHANGELOG.md _site/",
-    "predeploy": "npm run build"
+    "predeploy": "npm run build",
+    "qa": "npm run build && npm test"
   },
   "keywords": ["audio", "synchronization", "bluetooth", "latency", "multi-device"],
   "author": "Gabriel Radureau",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.44.0",
     "@rollup/plugin-commonjs": "^25.0.0",
     "@rollup/plugin-node-resolve": "^15.2.0",
     "@rollup/plugin-terser": "^0.4.0",
     "eslint": "^8.56.0",
+    "playwright": "^1.44.0",
     "rollup": "^4.0.0",
     "rollup-plugin-typescript2": "^0.36.0",
     "serve": "^14.2.1",
