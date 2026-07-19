@@ -3,8 +3,20 @@
   "version": "1.0.0",
   "description": "JavaScript library for synchronizing audio playback across multiple devices with automatic Bluetooth latency compensation",
   "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "build:prod": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint src/**/*.js --no-eslintrc --parser-options=ecmaVersion:2020,sourceType:module",
+    "typecheck": "tsc --noEmit",
+    "prepare": "npm run build",
+    "start": "node server.js",
+    "dev": "node server.js",
+    "serve": "npx serve .",
+    "deploy:pages": "npm run build && mkdir -p _site && cp -r docs/* _site/ && cp -r dist/* _site/ && cp -r example/* _site/ && cp package.json _site/ && cp README.md _site/ && cp LICENSE _site/ && cp CHANGELOG.md _site/",
+    "predeploy": "npm run build"
   },
   "keywords": ["audio", "synchronization", "bluetooth", "latency", "multi-device"],
   "author": "Gabriel Radureau",
@@ -13,8 +25,10 @@
     "@rollup/plugin-commonjs": "^25.0.0",
     "@rollup/plugin-node-resolve": "^15.2.0",
     "@rollup/plugin-terser": "^0.4.0",
+    "eslint": "^8.56.0",
     "rollup": "^4.0.0",
     "rollup-plugin-typescript2": "^0.36.0",
+    "serve": "^14.2.1",
     "typescript": "^5.0.0"
   },
   "files": ["dist", "src"],
@@ -22,5 +36,11 @@
     "type": "git",
     "url": "https://github.com/arcodange-org/sync-audio-js.git"
   },
-  "homepage": "https://github.com/arcodange-org/sync-audio-js#readme"
+  "homepage": "https://arcodange-org.github.io/sync-audio-js/",
+  "browserslist": [
+    "> 0.5%",
+    "last 2 versions",
+    "not dead",
+    "not op_mini all"
+  ]
 }

@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output (included in files)
+# dist/ is already in files array of package.json
+
+# Source files (included in files)
+# src/ is already in files array of package.json
+
+# Documentation
+docs/
+example/
+.github/
+
+# Configuration files
+rollup.config.js
+tsconfig.json
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+
+# Test files
+*.test.js
+*.spec.js
+
+# Coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.swp
