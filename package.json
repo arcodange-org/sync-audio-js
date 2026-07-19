@@ -12,6 +12,7 @@
     "test:ui": "npx playwright test --ui",
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
+    "test:demo": "npx playwright test tests/demo-video.spec.js --headed",
     "lint": "eslint src/**/*.js --no-eslintrc --parser-options=ecmaVersion:2020,sourceType:module",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build",
@@ -20,7 +21,11 @@
     "serve": "npx serve .",
     "deploy:pages": "npm run build && mkdir -p _site && cp -r docs/* _site/ && cp -r dist/* _site/ && cp -r example/* _site/ && cp package.json _site/ && cp README.md _site/ && cp LICENSE _site/ && cp CHANGELOG.md _site/",
     "predeploy": "npm run build",
-    "qa": "npm run build && npm test"
+    "qa": "npm run build && npm test",
+    "demo:video": "node scripts/generate-demo-video.js",
+    "demo:gif": "node scripts/record-gif.js",
+    "demo:screenshots": "node scripts/capture-screenshots.js",
+    "demo:check": "node scripts/check-pages.js"
   },
   "keywords": ["audio", "synchronization", "bluetooth", "latency", "multi-device"],
   "author": "Gabriel Radureau",
