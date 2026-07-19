@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncAudio Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 { color: #333; }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        .master { background-color: #d4edda; color: #155724; }
+        .slave { background-color: #fff3cd; color: #856404; }
+        .controls {
+            margin: 30px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        #audioPlayer { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>SyncAudio Demo</h1>
+    <div id="status" class="status">Connecting...</div>
+    <div class="controls">
+        <button id="startBtn" disabled>Start Sync</button>
+        <button id="pauseBtn" disabled>Pause</button>
+        <button id="stopBtn" disabled>Stop</button>
+    </div>
+    <div class="info">
+        <p>Bluetooth Latency: <span id="bluetoothLatency">Measuring...</span> ms</p>
+        <p>Clock Offset: <span id="clockOffset">0</span> ms</p>
+        <p>Role: <span id="role">Unknown</span></p>
+    </div>
+    <audio id="audioPlayer" controls></audio>
+
+    <script type="module">
+        import SyncAudio from '../src/index.js';
+
+        const audioFile = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+        const audioSync = new SyncAudio({
+            websocketUrl: 'ws://' + window.location.hostname + ':8080',
+            audioFile: audioFile,
+            autoStart: false,
+            autoMeasureLatency: true
+        });
+
+        audioSync.on('ready', ({ isMaster, bluetoothLatency }) => {
+            document.getElementById('status').textContent = isMaster ? 'Master' : 'Slave';
+            document.getElementById('status').className = isMaster ? 'status master' : 'status slave';
+            document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
+            document.getElementById('bluetoothLatency').textContent = bluetoothLatency;
+            document.getElementById('startBtn').disabled = !isMaster;
+            document.getElementById('pauseBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = false;
+        });
+
+        audioSync.on('bluetooth-latency', ({ latency }) => {
+            document.getElementById('bluetoothLatency').textContent = latency;
+        });
+
+        audioSync.on('clock-sync', ({ offset }) => {
+            document.getElementById('clockOffset').textContent = offset.toFixed(2);
+        });
+
+        audioSync.on('play', () => {
+            console.log('Audio started playing');
+        });
+
+        audioSync.on('pause', () => {
+            console.log('Audio paused');
+        });
+
+        audioSync.on('stop', () => {
+            console.log('Audio stopped');
+        });
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            audioSync.startSync();
+        });
+
+        document.getElementById('pauseBtn').addEventListener('click', () => {
+            audioSync.pauseSync();
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            audioSync.stopSync();
+        });
+    </script>
+</body>
+</html>
