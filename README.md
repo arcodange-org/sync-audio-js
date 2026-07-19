@@ -13,6 +13,10 @@
 - 🎛️ **Simple API** for synchronized playback
 - 📊 **Database of 50+ Bluetooth headphone latencies**
 
+## Demo
+
+Try it live: [https://arcodange-org.github.io/sync-audio-js/](https://arcodange-org.github.io/sync-audio-js/)
+
 ## Installation
 
 ```bash
