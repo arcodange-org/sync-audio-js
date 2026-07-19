@@ -55,9 +55,9 @@
     </div>
     <audio id="audioPlayer" controls></audio>
 
-    <script type="module">
-        import SyncAudio from '/dist/index.esm.js';
-
+    <!-- Use the published version from unpkg CDN -->
+    <script src="https://unpkg.com/sync-audio@1.0.0/dist/index.js"></script>
+    <script>
         const audioFile = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
         const audioSync = new SyncAudio({
             websocketUrl: 'ws://' + window.location.hostname + ':8080',

@@ -23,18 +23,40 @@ Try it live: [https://arcodange-org.github.io/sync-audio-js/](https://arcodange-
 npm install sync-audio
 ```
 
+Or use directly via CDN:
+```html
+<script src="https://unpkg.com/sync-audio@1.0.0/dist/index.js"></script>
+```
+
 ## Usage
 
+### Using npm
+```javascript
+import SyncAudio from 'sync-audio';
+
+const audioSync = new SyncAudio({
+  websocketUrl: 'ws://localhost:8080',
+  audioFile: 'your-song.mp3'
+});
+
+audioSync.on('ready', ({ isMaster }) => {
+  if (isMaster) {
+    audioSync.startSync();
+  }
+});
+```
+
+### Using CDN
 ```html
-<script src="https://unpkg.com/sync-audio/dist/index.js"></script>
+<script src="https://unpkg.com/sync-audio@1.0.0/dist/index.js"></script>
 <script>
 const audioSync = new SyncAudio({
   websocketUrl: 'ws://localhost:8080',
   audioFile: 'your-song.mp3'
 });
 
-audioSync.on('ready', () => {
-  if (audioSync.isMaster) {
+audioSync.on('ready', ({ isMaster }) => {
+  if (isMaster) {
     audioSync.startSync();
   }
 });
