@@ -218,9 +218,6 @@
         .play-pause-btn:hover {
             background-color: #218838;
         }
-        .hidden {
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -228,15 +225,15 @@
     
     <!-- Connection Mode Selection -->
     <div class="section">
-        <h2>\ud83d\udd17 Connection Mode</h2>
+        <h2>Connection Mode</h2>
         <p>Choose how to synchronize audio between devices:</p>
         <div class="connection-mode">
             <div class="mode-option">
-                <button id="localModeBtn" class="active">\ud83d\udcbb Local Mode (Same Browser)</button>
+                <button id="localModeBtn" class="active">Local Mode (Same Browser)</button>
                 <p style="font-size: 0.8em; margin-top: 5px;">Sync tabs in the same browser using BroadcastChannel</p>
             </div>
             <div class="mode-option">
-                <button id="serverModeBtn">\u26a1 Server Mode</button>
+                <button id="serverModeBtn">Server Mode</button>
                 <p style="font-size: 0.8em; margin-top: 5px;">Requires local server (npm start)</p>
             </div>
         </div>
@@ -269,7 +266,7 @@
     
     <!-- Audio Devices -->
     <div class="section">
-        <h2>\ud83d\udd0a Audio Output Devices</h2>
+        <h2>Audio Output Devices</h2>
         <p class="server-info">Select your Bluetooth headphones or other audio device. Click on a device to select it.</p>
         <ul id="deviceList" class="device-list">
             <li>Detecting devices...</li>
@@ -278,7 +275,7 @@
     
     <!-- Music Selection -->
     <div class="section">
-        <h2>\ud83c\udfb5 Music Track</h2>
+        <h2>Music Track</h2>
         <div class="music-selector">
             <select id="musicSelector" style="width: 100%; padding: 8px;">
                 <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">SoundHelix - Song 1 (Electronic)</option>
@@ -295,7 +292,7 @@
     
     <!-- Seek Controls -->
     <div class="section">
-        <h2>\ud83c\udf9a\ufe0f Playback Controls</h2>
+        <h2>Playback Controls</h2>
         <div class="seek-controls">
             <span class="time-display" id="currentTime">0:00</span>
             <input type="range" id="seekSlider" min="0" max="100" value="0" style="flex: 1;">
@@ -308,7 +305,7 @@
     
     <!-- Network Simulation -->
     <div class="section network-controls">
-        <h3>\ud83c\udf10 Network Simulation (For Testing)</h3>
+        <h3>Network Simulation (For Testing)</h3>
         <label for="latencySim">Simulate Latency (ms):</label>
         <input type="number" id="latencySim" min="0" max="5000" value="0" placeholder="0 = no latency">
         
@@ -318,14 +315,14 @@
         <label for="jitterSim">Simulate Jitter (ms):</label>
         <input type="number" id="jitterSim" min="0" max="1000" value="0" placeholder="0 = no jitter">
         
-        <button id="simulateBtn" class="simulate-btn" style="margin-top: 10px;">\ud83d\udd04 Apply Network Conditions</button>
+        <button id="simulateBtn" class="simulate-btn" style="margin-top: 10px;">Apply Network Conditions</button>
         <p id="networkStatus" style="margin-top: 10px; font-size: 0.9em;"></p>
     </div>
 
     <div id="status" class="status disconnected">Disconnected</div>
     <div class="controls">
         <button id="startBtn" disabled>Start Sync</button>
-        <button id="playPauseBtn" class="play-pause-btn" disabled>\u25B6\uFE0F Play</button>
+        <button id="playPauseBtn" class="play-pause-btn" disabled>Play</button>
         <button id="stopBtn" disabled>Stop</button>
         <button id="testBtn">Test Audio</button>
     </div>
@@ -339,720 +336,240 @@
     <script src="https://arcodange-org.github.io/sync-audio-js/dist/index.js"></script>
     <script>
         // ============================================
-        // LOCAL MODE: Uses BroadcastChannel for same-browser tabs
+        // SIMPLIFIED CLIENT CODE USING NEW LIBRARY INTERFACE
         // ============================================
         
-        class LocalSyncManager {
-            constructor() {
-                this.channel = null;
-                this.sessions = new Map();
-                this.clientId = this.generateClientId();
-                this.alias = localStorage.getItem('syncAudioAlias') || this.generateAlias();
-                localStorage.setItem('syncAudioAlias', this.alias);
-                this.isMaster = true;
-                this.audioElement = document.getElementById('audioPlayer');
-                this.musicSelector = document.getElementById('musicSelector');
-                this.seekSlider = document.getElementById('seekSlider');
-                this.currentTimeDisplay = document.getElementById('currentTime');
-                this.durationDisplay = document.getElementById('duration');
-                this.isSeeking = false;
-                this.lastSeekTime = 0;
-                this.isPlaying = false;
-                this.isPausedByUser = false;
+        let syncAudio = null;
+        let currentMode = 'broadcast';
+        
+        // DOM Elements
+        const audioElement = document.getElementById('audioPlayer');
+        const musicSelector = document.getElementById('musicSelector');
+        const seekSlider = document.getElementById('seekSlider');
+        const currentTimeDisplay = document.getElementById('currentTime');
+        const durationDisplay = document.getElementById('duration');
+        
+        // Generate alias
+        function generateAlias() {
+            const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy'];
+            const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime'];
+            const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala'];
+            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const animal = animals[Math.floor(Math.random() * animals.length)];
+            return `${adj} ${color} ${animal}`;
+        }
+        
+        // Initialize SyncAudio with selected mode
+        function initSyncAudio(mode) {
+            // Clean up previous instance
+            if (syncAudio) {
+                syncAudio.destroy();
+            }
+            
+            // Generate alias
+            const alias = localStorage.getItem('syncAudioAlias') || generateAlias();
+            localStorage.setItem('syncAudioAlias', alias);
+            
+            // Configuration
+            const config = {
+                mode: mode,
+                broadcastChannel: 'sync-audio-demo',
+                websocketUrl: mode === 'websocket' ? 'ws://' + window.location.hostname + ':8080' : null,
+                audioFile: musicSelector.value,
+                autoStart: false,
+                autoMeasureLatency: true,
+                sessionAlias: alias,
+                autoMaster: true
+            };
+            
+            // Create instance
+            syncAudio = new SyncAudio(config);
+            
+            // Setup event listeners
+            setupEventListeners();
+            
+            // Update UI
+            document.getElementById('sessionAlias').textContent = alias;
+            document.getElementById('syncStatus').textContent = 'Connecting...';
+        }
+        
+        // Setup all event listeners
+        function setupEventListeners() {
+            if (!syncAudio) return;
+            
+            syncAudio.on('ready', ({ isMaster, bluetoothLatency, clientId }) => {
+                document.getElementById('status').textContent = isMaster ? 'Master' : 'Slave';
+                document.getElementById('status').className = isMaster ? 'status master' : 'status slave';
+                document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
+                document.getElementById('role').className = isMaster ? 'role-master' : 'role-slave';
+                document.getElementById('clientId').textContent = clientId;
+                document.getElementById('bluetoothLatency').textContent = bluetoothLatency;
+                document.getElementById('startBtn').disabled = !isMaster;
+                document.getElementById('playPauseBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('syncStatus').textContent = 'Connected';
                 
-                // Network simulation
-                this.simulatedLatency = 0;
-                this.simulatedPacketLoss = 0;
-                this.simulatedJitter = 0;
-                
-                this.init();
-            }
+                updatePlayPauseButton();
+            });
             
-            generateClientId() {
-                return 'local-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-            }
+            syncAudio.on('role', ({ role, clientId }) => {
+                document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
+                document.getElementById('role').className = role === 'master' ? 'role-master' : 'role-slave';
+                document.getElementById('clientId').textContent = clientId;
+                document.getElementById('startBtn').disabled = role !== 'master';
+                updatePlayPauseButton();
+            });
             
-            generateAlias() {
-                const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy'];
-                const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime'];
-                const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala'];
-                const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-                const color = colors[Math.floor(Math.random() * colors.length)];
-                const animal = animals[Math.floor(Math.random() * animals.length)];
-                return `${adj} ${color} ${animal}`;
-            }
+            syncAudio.on('bluetooth-latency', ({ latency }) => {
+                document.getElementById('bluetoothLatency').textContent = latency;
+            });
             
-            init() {
-                try {
-                    this.channel = new BroadcastChannel('sync-audio-local');
-                    this.channel.addEventListener('message', (event) => {
-                        this.handleMessage(event.data);
-                    });
-                    
-                    // Announce ourselves
-                    this.broadcast({ type: 'join', clientId: this.clientId, alias: this.alias });
-                    
-                    // Update UI
-                    document.getElementById('sessionAlias').textContent = this.alias;
-                    document.getElementById('clientId').textContent = this.clientId;
-                    document.getElementById('status').textContent = 'Connected (Local)';
-                    document.getElementById('status').className = 'status master';
-                    document.getElementById('role').textContent = 'Master';
-                    document.getElementById('role').className = 'role-master';
-                    document.getElementById('syncStatus').textContent = 'Ready';
-                    
-                    // Enable controls
-                    document.getElementById('startBtn').disabled = false;
-                    document.getElementById('playPauseBtn').disabled = false;
-                    document.getElementById('stopBtn').disabled = false;
-                    
-                    // Setup controls
-                    this.setupControls();
-                    this.setupAudioEvents();
-                    
-                } catch (error) {
-                    console.error('BroadcastChannel not supported:', error);
-                    document.getElementById('status').textContent = 'Local Mode Not Supported';
-                }
-            }
+            syncAudio.on('clock-sync', ({ offset }) => {
+                document.getElementById('clockOffset').textContent = offset.toFixed(2);
+            });
             
-            broadcast(message) {
-                if (this.channel) {
-                    // Simulate network conditions
-                    if (Math.random() * 100 < this.simulatedPacketLoss) {
-                        console.log('Packet lost (simulated)');
-                        return;
-                    }
-                    
-                    const latency = this.simulatedLatency + (Math.random() * this.simulatedJitter * 2 - this.simulatedJitter);
-                    
-                    setTimeout(() => {
-                        this.channel.postMessage(message);
-                    }, latency);
-                }
-            }
+            syncAudio.on('session-update', ({ sessions }) => {
+                updateSessionList(sessions);
+            });
             
-            handleMessage(data) {
-                switch (data.type) {
-                    case 'join':
-                        this.sessions.set(data.clientId, { alias: data.alias, role: 'slave' });
-                        this.updateSessionList();
-                        break;
-                    case 'leave':
-                        this.sessions.delete(data.clientId);
-                        this.updateSessionList();
-                        break;
-                    case 'start':
-                        this.handleStart(data);
-                        break;
-                    case 'play':
-                        this.handlePlay(data);
-                        break;
-                    case 'pause':
-                        this.handlePause(data);
-                        break;
-                    case 'stop':
-                        this.audioElement.pause();
-                        this.audioElement.currentTime = 0;
-                        this.isPlaying = false;
-                        this.updatePlayPauseButton();
-                        break;
-                    case 'seek':
-                        this.handleSeek(data);
-                        break;
-                    case 'track-change':
-                        this.musicSelector.value = data.track;
-                        this.audioElement.src = data.track;
-                        break;
-                    case 'timeupdate':
-                        // Only update if not seeking and not master
-                        if (!this.isSeeking && !this.isMaster) {
-                            this.audioElement.currentTime = data.time;
-                        }
-                        break;
-                    case 'seeking':
-                        // Ignore seeking messages from others
-                        break;
-                }
-            }
+            syncAudio.on('play', () => {
+                updatePlayPauseButton();
+            });
             
-            handleStart(data) {
-                const audioElement = this.audioElement;
-                audioElement.src = data.track || this.musicSelector.value;
-                audioElement.currentTime = data.time || 0;
-                
-                // Play immediately
-                audioElement.play().catch(e => console.error('Autoplay blocked:', e));
-                this.isPlaying = true;
-                this.updatePlayPauseButton();
-            }
+            syncAudio.on('pause', () => {
+                updatePlayPauseButton();
+            });
             
-            handlePlay(data) {
-                if (!this.isMaster) {
-                    const audioElement = this.audioElement;
-                    audioElement.play().catch(e => console.error('Autoplay blocked:', e));
-                    this.isPlaying = true;
-                    this.updatePlayPauseButton();
-                }
-            }
+            syncAudio.on('stop', () => {
+                updatePlayPauseButton();
+            });
             
-            handlePause(data) {
-                if (!this.isMaster) {
-                    this.audioElement.pause();
-                    this.isPlaying = false;
-                    this.updatePlayPauseButton();
-                }
-            }
+            syncAudio.on('timeupdate', ({ time }) => {
+                updateTimeDisplay(time);
+            });
             
-            handleSeek(data) {
-                if (!this.isSeeking && !this.isMaster) {
-                    this.audioElement.currentTime = data.time;
-                }
-            }
+            syncAudio.on('seeked', ({ time }) => {
+                updateTimeDisplay(time);
+            });
             
-            updatePlayPauseButton() {
-                const btn = document.getElementById('playPauseBtn');
-                if (this.isPlaying) {
-                    btn.textContent = '\u275A\uFE0F Pause';
+            syncAudio.on('disconnect', () => {
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').textContent = 'Disconnected';
+                document.getElementById('syncStatus').textContent = 'Disconnected';
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('playPauseBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+                updatePlayPauseButton();
+            });
+            
+            // Setup controls
+            document.getElementById('startBtn').onclick = () => {
+                syncAudio.startSync();
+            };
+            
+            document.getElementById('playPauseBtn').onclick = () => {
+                if (syncAudio.isPlaying()) {
+                    syncAudio.pause();
                 } else {
-                    btn.textContent = '\u25B6\uFE0F Play';
+                    syncAudio.play();
                 }
-            }
+            };
             
-            updateSessionList() {
-                const sessionList = document.getElementById('sessionList');
-                const sessionCount = document.getElementById('sessionCount');
-                
-                sessionList.innerHTML = '';
-                
-                // Add current session
-                const currentLi = document.createElement('li');
-                currentLi.classList.add('active');
-                currentLi.innerHTML = `<strong>${this.alias}</strong> <span class="role-master">(Master)</span> <span class="client-id">[${this.clientId}]</span>`;
-                sessionList.appendChild(currentLi);
-                
-                // Add other sessions
-                this.sessions.forEach((session, clientId) => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<strong>${session.alias}</strong> <span class="role-slave">(Slave)</span> <span class="client-id">[${clientId}]</span>`;
-                    sessionList.appendChild(li);
-                });
-                
-                sessionCount.textContent = this.sessions.size + 1;
-            }
+            document.getElementById('stopBtn').onclick = () => {
+                syncAudio.stop();
+            };
             
-            setupControls() {
-                document.getElementById('startBtn').addEventListener('click', () => {
-                    this.broadcast({
-                        type: 'start',
-                        track: this.musicSelector.value,
-                        time: this.audioElement.currentTime,
-                        clientId: this.clientId
-                    });
-                    const audioElement = this.audioElement;
-                    audioElement.src = this.musicSelector.value;
-                    audioElement.currentTime = 0;
-                    audioElement.play().catch(e => console.error('Autoplay blocked:', e));
-                    this.isPlaying = true;
-                    this.updatePlayPauseButton();
+            document.getElementById('testBtn').onclick = () => {
+                audioElement.src = musicSelector.value;
+                audioElement.play().catch(e => {
+                    console.error('Autoplay blocked:', e);
+                    alert('Browser autoplay policy: Please interact with the page first (click anywhere), then try again.');
                 });
-                
-                document.getElementById('playPauseBtn').addEventListener('click', () => {
-                    if (this.isPlaying) {
-                        this.broadcast({ type: 'pause', clientId: this.clientId });
-                        this.audioElement.pause();
-                        this.isPlaying = false;
-                    } else {
-                        this.broadcast({ type: 'play', clientId: this.clientId });
-                        this.audioElement.play().catch(e => console.error('Autoplay blocked:', e));
-                        this.isPlaying = true;
-                    }
-                    this.updatePlayPauseButton();
-                });
-                
-                document.getElementById('stopBtn').addEventListener('click', () => {
-                    this.broadcast({ type: 'stop', clientId: this.clientId });
-                    this.audioElement.pause();
-                    this.audioElement.currentTime = 0;
-                    this.isPlaying = false;
-                    this.updatePlayPauseButton();
-                });
-                
-                document.getElementById('testBtn').addEventListener('click', () => {
-                    const audioElement = this.audioElement;
-                    audioElement.src = this.musicSelector.value;
-                    audioElement.play().catch(e => {
-                        console.error('Autoplay blocked:', e);
-                        alert('Browser autoplay policy: Please interact with the page first (click anywhere), then try again.');
-                    });
-                });
-                
-                document.getElementById('musicSelector').addEventListener('change', (e) => {
-                    this.broadcast({ type: 'track-change', track: e.target.value, clientId: this.clientId });
-                });
-            }
+            };
             
-            setupAudioEvents() {
-                const audioElement = this.audioElement;
-                
-                // Update time display
-                audioElement.addEventListener('timeupdate', () => {
-                    this.updateTimeDisplay();
-                    
-                    // Broadcast time updates (throttled)
-                    if (!this.isSeeking && this.isMaster) {
-                        this.broadcast({
-                            type: 'timeupdate',
-                            time: audioElement.currentTime,
-                            clientId: this.clientId
-                        });
-                    }
-                });
-                
-                // Handle seeking
-                audioElement.addEventListener('seeking', () => {
-                    this.isSeeking = true;
-                    this.broadcast({
-                        type: 'seeking',
-                        clientId: this.clientId
-                    });
-                });
-                
-                audioElement.addEventListener('seeked', () => {
-                    this.isSeeking = false;
-                    const currentTime = audioElement.currentTime;
-                    this.broadcast({
-                        type: 'seek',
-                        time: currentTime,
-                        clientId: this.clientId
-                    });
-                    
-                    // Update slider
-                    this.seekSlider.value = (currentTime / audioElement.duration) * 100 || 0;
-                });
-                
-                // Handle play/pause events from audio element
-                audioElement.addEventListener('play', () => {
-                    if (!this.isSeeking) {
-                        this.isPlaying = true;
-                        this.updatePlayPauseButton();
-                    }
-                });
-                
-                audioElement.addEventListener('pause', () => {
-                    if (!this.isSeeking) {
-                        this.isPlaying = false;
-                        this.updatePlayPauseButton();
-                    }
-                });
-                
-                // Handle loaded metadata
-                audioElement.addEventListener('loadedmetadata', () => {
-                    this.updateTimeDisplay();
-                    this.seekSlider.max = audioElement.duration || 100;
-                });
-                
-                // Handle duration change
-                audioElement.addEventListener('durationchange', () => {
-                    this.updateTimeDisplay();
-                    this.seekSlider.max = audioElement.duration || 100;
-                });
-                
-                // Seek slider
-                this.seekSlider.addEventListener('input', (e) => {
-                    const value = parseFloat(e.target.value);
-                    const duration = audioElement.duration || 100;
-                    const time = (value / 100) * duration;
-                    audioElement.currentTime = time;
-                });
-                
-                // Network simulation
-                document.getElementById('simulateBtn').addEventListener('click', () => {
-                    this.simulatedLatency = parseInt(document.getElementById('latencySim').value) || 0;
-                    this.simulatedPacketLoss = parseInt(document.getElementById('packetLoss').value) || 0;
-                    this.simulatedJitter = parseInt(document.getElementById('jitterSim').value) || 0;
-                    
-                    document.getElementById('networkStatus').textContent = 
-                        `Simulating: ${this.simulatedLatency}ms latency, ${this.simulatedPacketLoss}% loss, ${this.simulatedJitter}ms jitter`;
-                    document.getElementById('networkLatency').textContent = this.simulatedLatency;
-                });
-            }
+            document.getElementById('musicSelector').onchange = () => {
+                syncAudio.setAudioFile(musicSelector.value);
+            };
             
-            updateTimeDisplay() {
-                const audioElement = this.audioElement;
-                const currentTime = audioElement.currentTime;
-                const duration = audioElement.duration;
-                
-                this.currentTimeDisplay.textContent = this.formatTime(currentTime);
-                this.durationDisplay.textContent = duration ? this.formatTime(duration) : '0:00';
-                
-                if (duration && !isNaN(duration) && duration > 0) {
-                    this.seekSlider.value = (currentTime / duration) * 100;
+            // Setup seek slider
+            seekSlider.oninput = (e) => {
+                const value = parseFloat(e.target.value);
+                const duration = syncAudio.getDuration() || 100;
+                const time = (value / 100) * duration;
+                syncAudio.seek(time);
+            };
+            
+            // Setup audio element events for time display
+            audioElement.addEventListener('timeupdate', () => {
+                if (!syncAudio.isSeeking()) {
+                    updateTimeDisplay(syncAudio.getCurrentTime());
                 }
-            }
+            });
             
-            formatTime(seconds) {
-                if (!seconds || isNaN(seconds)) return '0:00';
-                const minutes = Math.floor(seconds / 60);
-                const secs = Math.floor(seconds % 60);
-                return `${minutes}:${secs.toString().padStart(2, '0')}`;
-            }
+            audioElement.addEventListener('loadedmetadata', () => {
+                updateTimeDisplay(syncAudio.getCurrentTime());
+                seekSlider.max = syncAudio.getDuration() || 100;
+            });
+        }
+        
+        function updatePlayPauseButton() {
+            if (!syncAudio) return;
             
-            destroy() {
-                if (this.channel) {
-                    this.broadcast({ type: 'leave', clientId: this.clientId });
-                    this.channel.close();
-                }
+            const btn = document.getElementById('playPauseBtn');
+            if (syncAudio.isPlaying()) {
+                btn.textContent = 'Pause';
+            } else {
+                btn.textContent = 'Play';
             }
         }
         
-        // ============================================
-        // SERVER MODE: Uses WebSocket (requires local server)
-        // ============================================
-        
-        class ServerSyncManager {
-            constructor() {
-                this.audioSync = null;
-                this.clientId = null;
-                this.alias = localStorage.getItem('syncAudioAlias') || this.generateAlias();
-                localStorage.setItem('syncAudioAlias', this.alias);
-                this.audioElement = document.getElementById('audioPlayer');
-                this.musicSelector = document.getElementById('musicSelector');
-                this.seekSlider = document.getElementById('seekSlider');
-                this.currentTimeDisplay = document.getElementById('currentTime');
-                this.durationDisplay = document.getElementById('duration');
-                this.isSeeking = false;
-                this.lastSeekTime = 0;
-                this.isPlaying = false;
-                
-                // Network simulation
-                this.simulatedLatency = 0;
-                this.simulatedPacketLoss = 0;
-                this.simulatedJitter = 0;
-                
-                this.init();
-            }
+        function updateTimeDisplay(time) {
+            const duration = syncAudio ? syncAudio.getDuration() : 0;
             
-            generateAlias() {
-                const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy'];
-                const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime'];
-                const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala'];
-                const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-                const color = colors[Math.floor(Math.random() * colors.length)];
-                const animal = animals[Math.floor(Math.random() * animals.length)];
-                return `${adj} ${color} ${animal}`;
-            }
+            currentTimeDisplay.textContent = formatTime(time);
+            durationDisplay.textContent = formatTime(duration);
             
-            getWebSocketUrl() {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                    return 'ws://' + window.location.hostname + ':8080';
-                }
-                return null;
-            }
-            
-            init() {
-                const wsUrl = this.getWebSocketUrl();
-                const selectedTrack = this.musicSelector.value;
-                
-                document.getElementById('sessionAlias').textContent = this.alias;
-                
-                if (!wsUrl) {
-                    document.getElementById('status').textContent = 'Server Not Available';
-                    document.getElementById('status').className = 'status disconnected';
-                    document.getElementById('syncStatus').textContent = 'Disconnected';
-                    return;
-                }
-                
-                try {
-                    this.audioSync = new SyncAudio({
-                        websocketUrl: wsUrl,
-                        audioFile: selectedTrack,
-                        autoStart: false,
-                        autoMeasureLatency: true,
-                        sessionAlias: this.alias
-                    });
-                    
-                    this.setupEvents();
-                    this.setupAudioEvents();
-                    
-                } catch (error) {
-                    console.error('Failed to initialize SyncAudio:', error);
-                    document.getElementById('status').textContent = 'Connection Failed';
-                    document.getElementById('status').className = 'status disconnected';
-                }
-            }
-            
-            setupEvents() {
-                if (!this.audioSync) return;
-                
-                this.audioSync.on('ready', ({ isMaster, bluetoothLatency }) => {
-                    document.getElementById('status').textContent = isMaster ? 'Master' : 'Slave';
-                    document.getElementById('status').className = isMaster ? 'status master' : 'status slave';
-                    document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
-                    document.getElementById('role').className = isMaster ? 'role-master' : 'role-slave';
-                    document.getElementById('bluetoothLatency').textContent = bluetoothLatency;
-                    document.getElementById('startBtn').disabled = !isMaster;
-                    document.getElementById('playPauseBtn').disabled = false;
-                    document.getElementById('stopBtn').disabled = false;
-                    document.getElementById('syncStatus').textContent = 'Connected';
-                    
-                    this.isMaster = isMaster;
-                    this.updatePlayPauseButton();
-                });
-
-                this.audioSync.on('role', ({ role, clientId: cid }) => {
-                    this.clientId = cid;
-                    document.getElementById('clientId').textContent = cid || 'Unknown';
-                    document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
-                    document.getElementById('role').className = role === 'master' ? 'role-master' : 'role-slave';
-                    this.isMaster = (role === 'master');
-                    document.getElementById('startBtn').disabled = !this.isMaster;
-                    this.updatePlayPauseButton();
-                });
-
-                this.audioSync.on('bluetooth-latency', ({ latency }) => {
-                    document.getElementById('bluetoothLatency').textContent = latency;
-                });
-
-                this.audioSync.on('clock-sync', ({ offset }) => {
-                    document.getElementById('clockOffset').textContent = offset.toFixed(2);
-                });
-
-                this.audioSync.on('session-update', ({ sessions }) => {
-                    this.updateSessionList(sessions);
-                });
-
-                this.audioSync.on('play', () => {
-                    this.isPlaying = true;
-                    this.updatePlayPauseButton();
-                });
-
-                this.audioSync.on('pause', () => {
-                    this.isPlaying = false;
-                    this.updatePlayPauseButton();
-                });
-
-                this.audioSync.on('stop', () => {
-                    this.isPlaying = false;
-                    this.updatePlayPauseButton();
-                });
-
-                this.audioSync.on('seek', ({ time }) => {
-                    if (!this.isSeeking && !this.isMaster) {
-                        this.audioElement.currentTime = time;
-                    }
-                });
-
-                this.audioSync.on('timeupdate', ({ time }) => {
-                    // Only update if not seeking and not master
-                    if (!this.isSeeking && !this.isMaster) {
-                        this.audioElement.currentTime = time;
-                    }
-                });
-
-                this.audioSync.on('disconnect', () => {
-                    document.getElementById('status').className = 'status disconnected';
-                    document.getElementById('status').textContent = 'Disconnected';
-                    document.getElementById('syncStatus').textContent = 'Disconnected';
-                    document.getElementById('startBtn').disabled = true;
-                    document.getElementById('playPauseBtn').disabled = true;
-                    document.getElementById('stopBtn').disabled = true;
-                    this.isPlaying = false;
-                    this.updatePlayPauseButton();
-                });
-            }
-            
-            updatePlayPauseButton() {
-                const btn = document.getElementById('playPauseBtn');
-                if (this.isPlaying) {
-                    btn.textContent = '\u275A\uFE0F Pause';
-                } else {
-                    btn.textContent = '\u25B6\uFE0F Play';
-                }
-            }
-            
-            updateSessionList(sessions) {
-                const sessionList = document.getElementById('sessionList');
-                const sessionCount = document.getElementById('sessionCount');
-                
-                sessionList.innerHTML = '';
-                
-                sessions.forEach(session => {
-                    const li = document.createElement('li');
-                    li.dataset.clientId = session.clientId;
-                    const isCurrent = session.clientId === this.clientId;
-                    const alias = session.alias || (isCurrent ? this.alias : 'Unknown');
-                    
-                    const roleClass = session.role === 'master' ? 'role-master' : 'role-slave';
-                    const roleText = session.role === 'master' ? 'Master' : 'Slave';
-                    
-                    li.innerHTML = `<strong>${alias}</strong> <span class="${roleClass}">(${roleText})</span> <span class="client-id">[${session.clientId}]</span>`;
-                    if (isCurrent) {
-                        li.classList.add('active');
-                    }
-                    sessionList.appendChild(li);
-                });
-                
-                const count = sessions.length;
-                sessionCount.textContent = count;
-                
-                if (count === 0) {
-                    sessionList.innerHTML = '<li>No sessions connected yet</li>';
-                }
-            }
-            
-            setupAudioEvents() {
-                const audioElement = this.audioElement;
-                
-                // Update time display
-                audioElement.addEventListener('timeupdate', () => {
-                    this.updateTimeDisplay();
-                    
-                    // Broadcast time updates (throttled)
-                    if (!this.isSeeking && this.isMaster && this.audioSync) {
-                        this.audioSync._emit('timeupdate', audioElement.currentTime);
-                    }
-                });
-                
-                // Handle seeking
-                audioElement.addEventListener('seeking', () => {
-                    this.isSeeking = true;
-                    if (this.audioSync) {
-                        this.audioSync.websocket.send(JSON.stringify({
-                            type: 'seeking',
-                            clientId: this.clientId
-                        }));
-                    }
-                });
-                
-                audioElement.addEventListener('seeked', () => {
-                    this.isSeeking = false;
-                    const currentTime = audioElement.currentTime;
-                    
-                    if (this.audioSync) {
-                        this.audioSync.websocket.send(JSON.stringify({
-                            type: 'seek',
-                            time: currentTime,
-                            clientId: this.clientId
-                        }));
-                    }
-                    
-                    // Update slider
-                    this.seekSlider.value = (currentTime / audioElement.duration) * 100 || 0;
-                });
-                
-                // Handle play/pause events from audio element
-                audioElement.addEventListener('play', () => {
-                    if (!this.isSeeking) {
-                        this.isPlaying = true;
-                        this.updatePlayPauseButton();
-                    }
-                });
-                
-                audioElement.addEventListener('pause', () => {
-                    if (!this.isSeeking) {
-                        this.isPlaying = false;
-                        this.updatePlayPauseButton();
-                    }
-                });
-                
-                // Handle loaded metadata
-                audioElement.addEventListener('loadedmetadata', () => {
-                    this.updateTimeDisplay();
-                    this.seekSlider.max = audioElement.duration || 100;
-                });
-                
-                // Handle duration change
-                audioElement.addEventListener('durationchange', () => {
-                    this.updateTimeDisplay();
-                    this.seekSlider.max = audioElement.duration || 100;
-                });
-                
-                // Seek slider
-                this.seekSlider.addEventListener('input', (e) => {
-                    const value = parseFloat(e.target.value);
-                    const duration = audioElement.duration || 100;
-                    const time = (value / 100) * duration;
-                    audioElement.currentTime = time;
-                });
-                
-                // Network simulation
-                document.getElementById('simulateBtn').addEventListener('click', () => {
-                    this.simulatedLatency = parseInt(document.getElementById('latencySim').value) || 0;
-                    this.simulatedPacketLoss = parseInt(document.getElementById('packetLoss').value) || 0;
-                    this.simulatedJitter = parseInt(document.getElementById('jitterSim').value) || 0;
-                    
-                    document.getElementById('networkStatus').textContent = 
-                        `Simulating: ${this.simulatedLatency}ms latency, ${this.simulatedPacketLoss}% loss, ${this.simulatedJitter}ms jitter`;
-                    document.getElementById('networkLatency').textContent = this.simulatedLatency;
-                });
-                
-                // Setup controls
-                document.getElementById('startBtn').addEventListener('click', () => {
-                    if (this.audioSync) this.audioSync.startSync();
-                });
-
-                document.getElementById('playPauseBtn').addEventListener('click', () => {
-                    if (this.isPlaying) {
-                        if (this.audioSync) this.audioSync.pauseSync();
-                    } else {
-                        if (this.audioSync) this.audioSync.startSync();
-                    }
-                });
-
-                document.getElementById('stopBtn').addEventListener('click', () => {
-                    if (this.audioSync) this.audioSync.stopSync();
-                });
-
-                document.getElementById('testBtn').addEventListener('click', () => {
-                    const audioElement = this.audioElement;
-                    audioElement.src = this.musicSelector.value;
-                    audioElement.play().catch(e => {
-                        console.error('Autoplay blocked:', e);
-                        alert('Browser autoplay policy: Please interact with the page first (click anywhere), then try again.');
-                    });
-                });
-
-                document.getElementById('musicSelector').addEventListener('change', (e) => {
-                    if (this.audioSync) {
-                        this.audioSync.setAudioFile(e.target.value);
-                    }
-                });
-            }
-            
-            updateTimeDisplay() {
-                const audioElement = this.audioElement;
-                const currentTime = audioElement.currentTime;
-                const duration = audioElement.duration;
-                
-                this.currentTimeDisplay.textContent = this.formatTime(currentTime);
-                this.durationDisplay.textContent = duration ? this.formatTime(duration) : '0:00';
-                
-                if (duration && !isNaN(duration) && duration > 0) {
-                    this.seekSlider.value = (currentTime / duration) * 100;
-                }
-            }
-            
-            formatTime(seconds) {
-                if (!seconds || isNaN(seconds)) return '0:00';
-                const minutes = Math.floor(seconds / 60);
-                const secs = Math.floor(seconds % 60);
-                return `${minutes}:${secs.toString().padStart(2, '0')}`;
-            }
-            
-            destroy() {
-                if (this.audioSync) {
-                    this.audioSync.destroy();
-                }
+            if (duration && !isNaN(duration) && duration > 0) {
+                seekSlider.value = (time / duration) * 100;
             }
         }
         
-        // ============================================
-        // MAIN INITIALIZATION
-        // ============================================
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '0:00';
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
         
-        let currentManager = null;
-        let currentMode = 'local';
+        function updateSessionList(sessions) {
+            const sessionList = document.getElementById('sessionList');
+            const sessionCount = document.getElementById('sessionCount');
+            
+            sessionList.innerHTML = '';
+            
+            if (!sessions || sessions.length === 0) {
+                sessionList.innerHTML = '<li>No sessions connected yet</li>';
+                sessionCount.textContent = '0';
+                return;
+            }
+            
+            sessions.forEach(session => {
+                const li = document.createElement('li');
+                const isCurrent = session.clientId === syncAudio.getClientId();
+                const alias = session.alias || 'Unknown';
+                const roleClass = session.role === 'master' ? 'role-master' : 'role-slave';
+                const roleText = session.role === 'master' ? 'Master' : 'Slave';
+                
+                li.innerHTML = `<strong>${alias}</strong> <span class="${roleClass}">(${roleText})</span> <span class="client-id">[${session.clientId}]</span>`;
+                if (isCurrent) {
+                    li.classList.add('active');
+                }
+                sessionList.appendChild(li);
+            });
+            
+            sessionCount.textContent = sessions.length;
+        }
         
         // List audio devices with Bluetooth detection
         async function listAudioDevices() {
@@ -1078,9 +595,7 @@
                                        device.deviceId.toLowerCase().includes('bluetooth') ||
                                        label.toLowerCase().includes('wireless') ||
                                        label.toLowerCase().includes('headphones') ||
-                                       label.toLowerCase().includes('earbuds') ||
-                                       label.toLowerCase().includes('airpods') ||
-                                       label.toLowerCase().includes('air pods');
+                                       label.toLowerCase().includes('earbuds');
                     
                     const deviceInfo = {
                         deviceId: device.deviceId,
@@ -1099,7 +614,7 @@
                 bluetoothDevices.forEach(device => {
                     const li = document.createElement('li');
                     li.classList.add('bluetooth');
-                    li.innerHTML = `<span class="bluetooth-icon">\ud83d\udce1</span> ${device.label}`;
+                    li.innerHTML = `<span class="bluetooth-icon">📡</span> ${device.label}`;
                     li.dataset.deviceId = device.deviceId;
                     li.addEventListener('click', () => selectDevice(device.deviceId));
                     deviceList.appendChild(li);
@@ -1122,8 +637,6 @@
         
         // Select audio device
         async function selectDevice(deviceId) {
-            const audioElement = document.getElementById('audioPlayer');
-            
             try {
                 if (audioElement.setSinkId) {
                     await audioElement.setSinkId(deviceId);
@@ -1157,20 +670,15 @@
             const serverBtn = document.getElementById('serverModeBtn');
             
             localBtn.addEventListener('click', () => {
-                switchMode('local');
+                switchMode('broadcast');
             });
             
             serverBtn.addEventListener('click', () => {
-                switchMode('server');
+                switchMode('websocket');
             });
         }
         
         function switchMode(mode) {
-            // Clean up current manager
-            if (currentManager && currentManager.destroy) {
-                currentManager.destroy();
-            }
-            
             // Update UI
             document.querySelectorAll('.mode-option button').forEach(btn => {
                 btn.classList.remove('active');
@@ -1178,19 +686,11 @@
             document.getElementById(`${mode}ModeBtn`).classList.add('active');
             
             // Hide/show sections
-            document.getElementById('serverInfo').style.display = mode === 'server' ? 'block' : 'none';
+            document.getElementById('serverInfo').style.display = mode === 'websocket' ? 'block' : 'none';
             
-            // Initialize new manager
-            switch (mode) {
-                case 'local':
-                    currentManager = new LocalSyncManager();
-                    break;
-                case 'server':
-                    currentManager = new ServerSyncManager();
-                    break;
-            }
-            
+            // Initialize SyncAudio
             currentMode = mode;
+            initSyncAudio(mode);
         }
         
         // Initialize
@@ -1198,8 +698,8 @@
             await listAudioDevices();
             initModeButtons();
             
-            // Start with local mode by default
-            switchMode('local');
+            // Start with broadcast mode by default
+            switchMode('broadcast');
         });
     </script>
 </body>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncAudio - Simple Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 { color: #333; }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        .master { background-color: #d4edda; color: #155724; }
+        .slave { background-color: #fff3cd; color: #856404; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .controls {
+            margin: 30px 0;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 0 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .play-btn { background-color: #28a745; color: white; }
+        .pause-btn { background-color: #ffc107; color: #212529; }
+        .stop-btn { background-color: #dc3545; color: white; }
+        .start-btn { background-color: #007bff; color: white; }
+        
+        .seek-controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            align-items: center;
+        }
+        .seek-controls input[type="range"] {
+            flex: 1;
+        }
+        .time-display {
+            font-family: monospace;
+            font-size: 14px;
+            min-width: 80px;
+            text-align: center;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .mode-selector {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .mode-btn {
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+        .mode-btn.active {
+            background-color: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>SyncAudio - Simple Demo</h1>
+    
+    <div class="mode-selector">
+        <button class="mode-btn active" data-mode="broadcast">Local Mode</button>
+        <button class="mode-btn" data-mode="websocket">Server Mode</button>
+    </div>
+    
+    <div class="info">
+        <p>Status: <span id="status">Initializing...</span></p>
+        <p>Role: <span id="role">Unknown</span></p>
+        <p>Client ID: <span id="clientId">Unknown</span></p>
+        <p>Sessions: <span id="sessionCount">0</span></p>
+    </div>
+    
+    <div class="music-selector">
+        <select id="musicSelector">
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">SoundHelix - Song 1</option>
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3">SoundHelix - Song 2</option>
+            <option value="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3">Bell Ringing</option>
+        </select>
+    </div>
+    
+    <div class="seek-controls">
+        <span class="time-display" id="currentTime">0:00</span>
+        <input type="range" id="seekSlider" min="0" max="100" value="0">
+        <span class="time-display" id="duration">0:00</span>
+    </div>
+    
+    <div class="controls">
+        <button id="startBtn" class="start-btn" disabled>Start Sync</button>
+        <button id="playBtn" class="play-btn" disabled>▶️ Play</button>
+        <button id="pauseBtn" class="pause-btn" disabled>⏸️ Pause</button>
+        <button id="stopBtn" class="stop-btn" disabled>⏹️ Stop</button>
+    </div>
+    
+    <audio id="audioPlayer" controls></audio>
+
+    <script src="https://arcodange-org.github.io/sync-audio-js/dist/index.js"></script>
+    <script>
+        // Configuration
+        const config = {
+            mode: 'broadcast', // or 'websocket'
+            broadcastChannel: 'sync-audio-simple-demo',
+            autoMeasureLatency: true,
+            sessionAlias: 'User-' + Math.random().toString(36).substring(2, 6)
+        };
+        
+        let syncAudio = null;
+        const audioElement = document.getElementById('audioPlayer');
+        const musicSelector = document.getElementById('musicSelector');
+        const seekSlider = document.getElementById('seekSlider');
+        const currentTimeDisplay = document.getElementById('currentTime');
+        const durationDisplay = document.getElementById('duration');
+        
+        // Initialize
+        async function init(mode) {
+            // Clean up previous instance
+            if (syncAudio) {
+                syncAudio.destroy();
+            }
+            
+            // Update config
+            config.mode = mode;
+            config.audioFile = musicSelector.value;
+            
+            // Create new instance
+            syncAudio = new SyncAudio(config);
+            
+            // Setup event listeners
+            syncAudio.on('ready', ({ isMaster, bluetoothLatency, clientId }) => {
+                document.getElementById('status').textContent = 'Connected';
+                document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
+                document.getElementById('clientId').textContent = clientId;
+                document.getElementById('startBtn').disabled = !isMaster;
+                document.getElementById('playBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = false;
+            });
+            
+            syncAudio.on('role', ({ role }) => {
+                document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
+                document.getElementById('startBtn').disabled = role !== 'master';
+            });
+            
+            syncAudio.on('session-update', ({ sessions }) => {
+                document.getElementById('sessionCount').textContent = sessions.length;
+            });
+            
+            syncAudio.on('play', () => {
+                updatePlayPauseButtons();
+            });
+            
+            syncAudio.on('pause', () => {
+                updatePlayPauseButtons();
+            });
+            
+            syncAudio.on('stop', () => {
+                updatePlayPauseButtons();
+            });
+            
+            syncAudio.on('timeupdate', ({ time }) => {
+                updateTimeDisplay(time);
+            });
+            
+            syncAudio.on('seeked', ({ time }) => {
+                updateTimeDisplay(time);
+            });
+            
+            syncAudio.on('disconnect', () => {
+                document.getElementById('status').textContent = 'Disconnected';
+                document.getElementById('playBtn').disabled = true;
+                document.getElementById('pauseBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+            });
+            
+            // Setup controls
+            document.getElementById('startBtn').onclick = () => {
+                syncAudio.startSync();
+            };
+            
+            document.getElementById('playBtn').onclick = () => {
+                syncAudio.play();
+            };
+            
+            document.getElementById('pauseBtn').onclick = () => {
+                syncAudio.pause();
+            };
+            
+            document.getElementById('stopBtn').onclick = () => {
+                syncAudio.stop();
+            };
+            
+            document.getElementById('musicSelector').onchange = () => {
+                syncAudio.setAudioFile(musicSelector.value);
+            };
+            
+            // Setup seek slider
+            seekSlider.oninput = (e) => {
+                const value = parseFloat(e.target.value);
+                const duration = syncAudio.getDuration() || 100;
+                const time = (value / 100) * duration;
+                syncAudio.seek(time);
+            };
+            
+            // Setup audio element events for time display
+            audioElement.addEventListener('timeupdate', () => {
+                if (!syncAudio.isSeeking()) {
+                    updateTimeDisplay(syncAudio.getCurrentTime());
+                }
+            });
+            
+            audioElement.addEventListener('loadedmetadata', () => {
+                updateTimeDisplay(syncAudio.getCurrentTime());
+                seekSlider.max = syncAudio.getDuration() || 100;
+            });
+        }
+        
+        function updatePlayPauseButtons() {
+            const isPlaying = syncAudio ? syncAudio.isPlaying() : false;
+            document.getElementById('playBtn').disabled = isPlaying;
+            document.getElementById('pauseBtn').disabled = !isPlaying;
+        }
+        
+        function updateTimeDisplay(time) {
+            const duration = syncAudio ? syncAudio.getDuration() : 0;
+            
+            currentTimeDisplay.textContent = formatTime(time);
+            durationDisplay.textContent = formatTime(duration);
+            
+            if (duration && !isNaN(duration) && duration > 0) {
+                seekSlider.value = (time / duration) * 100;
+            }
+        }
+        
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '0:00';
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Mode selector
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                init(btn.dataset.mode);
+            };
+        });
+        
+        // Initialize with broadcast mode
+        document.addEventListener('DOMContentLoaded', () => {
+            init('broadcast');
+        });
+    </script>
+</body>
+</html>

@@ -4,15 +4,45 @@ import { getBluetoothLatency, preMeasureBluetoothLatency } from './BluetoothLate
 import { getLatencyFromDB, updateLatencyDB } from './database.js';
 
 const DEFAULT_CONFIG = {
+  // Mode: 'websocket' (server) or 'broadcast' (local)
+  mode: 'websocket',
   websocketUrl: 'ws://localhost:8080',
+  broadcastChannel: 'sync-audio-local',
   audioFile: null,
   autoStart: false,
   autoMeasureLatency: true,
   latencyCompensation: 0,
   clockSyncConfig: {},
   audioPlayerConfig: {},
-  sessionAlias: null
+  sessionAlias: null,
+  // For local mode, auto-elect first as master
+  autoMaster: true
 };
+
+// Simple in-memory clock sync for broadcast mode
+class SimpleClockSync {
+  constructor() {
+    this.offset = 0;
+    this.listeners = [];
+    this.lastSync = Date.now();
+  }
+  
+  addListener(callback) {
+    this.listeners.push(callback);
+  }
+  
+  getClockOffset() {
+    return this.offset;
+  }
+  
+  getSyncedTime() {
+    return Date.now() + this.offset;
+  }
+  
+  destroy() {}
+  
+  _startPeriodicSync() {}
+}
 
 export class SyncAudio {
   constructor(options = {}) {
@@ -20,26 +50,80 @@ export class SyncAudio {
     this.audioPlayer = null;
     this.clockSync = null;
     this.websocket = null;
+    this.broadcastChannel = null;
     this.isMaster = false;
     this.bluetoothLatency = 0;
     this.clientId = null;
+    this.sessions = new Map();
     this._listeners = {};
+    this._isSeeking = false;
+    this._isPlaying = false;
     this._init();
   }
 
   async _init() {
-    await this._connectWebSocket();
-    this._initClockSync();
+    // Generate client ID
+    this.clientId = this._generateClientId();
+    
+    // Initialize based on mode
+    if (this.config.mode === 'broadcast') {
+      await this._initBroadcastMode();
+    } else {
+      await this._initWebSocketMode();
+    }
+    
+    // Initialize audio player if file provided
     if (this.config.audioFile) {
       this._initAudioPlayer();
     }
+    
+    // Measure Bluetooth latency
     if (this.config.autoMeasureLatency) {
       await this._measureBluetoothLatency();
     }
-    this._emit('ready', { isMaster: this.isMaster, bluetoothLatency: this.bluetoothLatency });
+    
+    this._emit('ready', { 
+      isMaster: this.isMaster, 
+      bluetoothLatency: this.bluetoothLatency,
+      mode: this.config.mode,
+      clientId: this.clientId
+    });
   }
 
-  async _connectWebSocket() {
+  _generateClientId() {
+    return 'client-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+  }
+
+  async _initBroadcastMode() {
+    try {
+      this.broadcastChannel = new BroadcastChannel(this.config.broadcastChannel);
+      this.clockSync = new SimpleClockSync();
+      
+      // Set as master if autoMaster or first to join
+      this.isMaster = this.config.autoMaster;
+      
+      // Send join message
+      this._broadcast({ 
+        type: 'join', 
+        clientId: this.clientId,
+        alias: this.config.sessionAlias || 'Unknown'
+      });
+      
+      // Listen for messages
+      this.broadcastChannel.addEventListener('message', (event) => {
+        this._handleBroadcastMessage(event.data);
+      });
+      
+      // Emit initial session update
+      this._emit('session-update', { sessions: Array.from(this.sessions.values()) });
+      
+    } catch (error) {
+      console.error('BroadcastChannel not supported:', error);
+      throw error;
+    }
+  }
+
+  async _initWebSocketMode() {
     return new Promise((resolve, reject) => {
       try {
         this.websocket = new WebSocket(this.config.websocketUrl);
@@ -56,25 +140,7 @@ export class SyncAudio {
         });
         this.websocket.addEventListener('message', (event) => {
           const data = JSON.parse(event.data);
-          if (data.type === 'role') {
-            this.isMaster = data.role === 'master';
-            this.clientId = data.clientId;
-            this._emit('role', { role: data.role, clientId: data.clientId });
-          } else if (data.type === 'start') {
-            this._emit('start', data);
-          } else if (data.type === 'stop') {
-            this._emit('stop');
-          } else if (data.type === 'pause') {
-            this._emit('pause');
-          } else if (data.type === 'session-update') {
-            this._emit('session-update', { sessions: data.sessions });
-          } else if (data.type === 'seek') {
-            this._emit('seek', { time: data.time, clientId: data.clientId });
-          } else if (data.type === 'seeking') {
-            this._emit('seeking', { clientId: data.clientId });
-          } else if (data.type === 'timeupdate') {
-            this._emit('timeupdate', { time: data.time, clientId: data.clientId });
-          }
+          this._handleWebSocketMessage(data);
         });
         this.websocket.addEventListener('error', (error) => {
           console.error('WebSocket error:', error);
@@ -91,35 +157,227 @@ export class SyncAudio {
     });
   }
 
+  _handleBroadcastMessage(data) {
+    switch (data.type) {
+      case 'join':
+        // If someone joins and we're not master, they become master
+        if (!this.isMaster && this.config.autoMaster) {
+          this.isMaster = true;
+          this._emit('role', { role: 'master', clientId: this.clientId });
+        }
+        this.sessions.set(data.clientId, { 
+          alias: data.alias, 
+          role: this.isMaster ? 'slave' : 'master',
+          clientId: data.clientId
+        });
+        this._emit('session-update', { sessions: Array.from(this.sessions.values()) });
+        break;
+        
+      case 'leave':
+        this.sessions.delete(data.clientId);
+        this._emit('session-update', { sessions: Array.from(this.sessions.values()) });
+        break;
+        
+      case 'start':
+        this._emit('start', data);
+        if (!this.isMaster) {
+          this._handleRemoteStart(data);
+        }
+        break;
+        
+      case 'play':
+        this._emit('play', data);
+        if (!this.isMaster) {
+          this._handleRemotePlay(data);
+        }
+        break;
+        
+      case 'pause':
+        this._emit('pause', data);
+        if (!this.isMaster) {
+          this._handleRemotePause(data);
+        }
+        break;
+        
+      case 'stop':
+        this._emit('stop', data);
+        if (!this.isMaster) {
+          this._handleRemoteStop(data);
+        }
+        break;
+        
+      case 'seek':
+        this._emit('seek', { time: data.time, clientId: data.clientId });
+        if (!this.isMaster && !this._isSeeking) {
+          this._handleRemoteSeek(data);
+        }
+        break;
+        
+      case 'timeupdate':
+        this._emit('timeupdate', { time: data.time, clientId: data.clientId });
+        if (!this.isMaster && !this._isSeeking) {
+          this._handleRemoteTimeUpdate(data);
+        }
+        break;
+        
+      case 'seeking':
+        this._emit('seeking', { clientId: data.clientId });
+        break;
+    }
+  }
+
+  _handleWebSocketMessage(data) {
+    switch (data.type) {
+      case 'role':
+        this.isMaster = data.role === 'master';
+        this.clientId = data.clientId;
+        this._emit('role', { role: data.role, clientId: data.clientId });
+        break;
+      case 'start':
+        this._emit('start', data);
+        if (!this.isMaster) {
+          this._handleRemoteStart(data);
+        }
+        break;
+      case 'play':
+        this._emit('play', data);
+        if (!this.isMaster) {
+          this._handleRemotePlay(data);
+        }
+        break;
+      case 'pause':
+        this._emit('pause', data);
+        if (!this.isMaster) {
+          this._handleRemotePause(data);
+        }
+        break;
+      case 'stop':
+        this._emit('stop', data);
+        if (!this.isMaster) {
+          this._handleRemoteStop(data);
+        }
+        break;
+      case 'seek':
+        this._emit('seek', { time: data.time, clientId: data.clientId });
+        if (!this.isMaster && !this._isSeeking) {
+          this._handleRemoteSeek(data);
+        }
+        break;
+      case 'timeupdate':
+        this._emit('timeupdate', { time: data.time, clientId: data.clientId });
+        if (!this.isMaster && !this._isSeeking) {
+          this._handleRemoteTimeUpdate(data);
+        }
+        break;
+      case 'seeking':
+        this._emit('seeking', { clientId: data.clientId });
+        break;
+      case 'session-update':
+        this.sessions = new Map(data.sessions.map(s => [s.clientId, s]));
+        this._emit('session-update', { sessions: data.sessions });
+        break;
+      case 'set-alias':
+        // Ignore
+        break;
+    }
+  }
+
+  _handleRemoteStart(data) {
+    if (this.audioPlayer) {
+      const startTime = data.startTime || 0;
+      const track = data.track || this.config.audioFile;
+      this.audioPlayer.setFile(track);
+      this.audioPlayer.playAt(startTime, this.bluetoothLatency, this.config.latencyCompensation);
+    }
+  }
+
+  _handleRemotePlay(data) {
+    if (this.audioPlayer && !this._isPlaying) {
+      this.audioPlayer.play();
+      this._isPlaying = true;
+    }
+  }
+
+  _handleRemotePause(data) {
+    if (this.audioPlayer && this._isPlaying) {
+      this.audioPlayer.pause();
+      this._isPlaying = false;
+    }
+  }
+
+  _handleRemoteStop(data) {
+    if (this.audioPlayer) {
+      this.audioPlayer.stop();
+      this._isPlaying = false;
+    }
+  }
+
+  _handleRemoteSeek(data) {
+    if (this.audioPlayer) {
+      this.audioPlayer.setTime(data.time);
+    }
+  }
+
+  _handleRemoteTimeUpdate(data) {
+    if (this.audioPlayer) {
+      this.audioPlayer.setTime(data.time);
+    }
+  }
+
   _initClockSync() {
-    this.clockSync = new ClockSync(this.websocket, this.config.clockSyncConfig);
-    this.clockSync.addListener((offset, lastSyncTime) => {
-      this._emit('clock-sync', { offset, lastSyncTime });
-    });
-    this.clockSync._startPeriodicSync();
+    if (this.config.mode === 'broadcast') {
+      // Already initialized as SimpleClockSync
+      return;
+    }
+    
+    if (this.websocket) {
+      this.clockSync = new ClockSync(this.websocket, this.config.clockSyncConfig);
+      this.clockSync.addListener((offset, lastSyncTime) => {
+        this._emit('clock-sync', { offset, lastSyncTime });
+      });
+      this.clockSync._startPeriodicSync();
+    }
   }
 
   _initAudioPlayer() {
     this.audioPlayer = new AudioPlayer(this.config.audioFile, this.config.audioPlayerConfig);
-    this.audioPlayer.addEventListener('play', () => this._emit('play'));
-    this.audioPlayer.addEventListener('pause', () => this._emit('pause'));
-    this.audioPlayer.addEventListener('stop', () => this._emit('stop'));
-    this.audioPlayer.addEventListener('error', (error) => this._emit('error', error));
-    this.audioPlayer.addEventListener('timeupdate', (time) => this._emit('timeupdate', time));
     
-    // Add seek event listeners
-    this.audioPlayer.addEventListener('seeking', () => {
-      if (this.isMaster && this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-        this.websocket.send(JSON.stringify({ type: 'seeking', clientId: this.clientId }));
+    this.audioPlayer.addEventListener('play', () => {
+      this._isPlaying = true;
+      this._emit('play');
+    });
+    this.audioPlayer.addEventListener('pause', () => {
+      this._isPlaying = false;
+      this._emit('pause');
+    });
+    this.audioPlayer.addEventListener('stop', () => {
+      this._isPlaying = false;
+      this._emit('stop');
+    });
+    this.audioPlayer.addEventListener('error', (error) => this._emit('error', error));
+    this.audioPlayer.addEventListener('timeupdate', (time) => {
+      this._emit('timeupdate', { time, clientId: this.clientId });
+      // Broadcast time updates if master
+      if (this.isMaster && !this._isSeeking) {
+        this._broadcastTimeUpdate(time);
       }
-      this._emit('seeking');
+    });
+    
+    // Seek event listeners
+    this.audioPlayer.addEventListener('seeking', () => {
+      this._isSeeking = true;
+      this._emit('seeking', { clientId: this.clientId });
+      if (this.isMaster) {
+        this._broadcastSeeking();
+      }
     });
     
     this.audioPlayer.addEventListener('seeked', (time) => {
-      if (this.isMaster && this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-        this.websocket.send(JSON.stringify({ type: 'seek', time: time, clientId: this.clientId }));
+      this._isSeeking = false;
+      this._emit('seeked', { time, clientId: this.clientId });
+      if (this.isMaster) {
+        this._broadcastSeek(time);
       }
-      this._emit('seeked', { time });
     });
   }
 
@@ -131,6 +389,45 @@ export class SyncAudio {
       console.warn('Failed to measure Bluetooth latency:', error);
       this.bluetoothLatency = 80;
     }
+  }
+
+  _broadcast(message) {
+    if (this.broadcastChannel) {
+      this.broadcastChannel.postMessage(message);
+    }
+  }
+
+  _broadcastSeeking() {
+    this._broadcast({ type: 'seeking', clientId: this.clientId });
+  }
+
+  _broadcastSeek(time) {
+    this._broadcast({ type: 'seek', time, clientId: this.clientId });
+  }
+
+  _broadcastTimeUpdate(time) {
+    this._broadcast({ type: 'timeupdate', time, clientId: this.clientId });
+  }
+
+  _broadcastPlay() {
+    this._broadcast({ type: 'play', clientId: this.clientId });
+  }
+
+  _broadcastPause() {
+    this._broadcast({ type: 'pause', clientId: this.clientId });
+  }
+
+  _broadcastStop() {
+    this._broadcast({ type: 'stop', clientId: this.clientId });
+  }
+
+  _broadcastStart(track, startTime) {
+    this._broadcast({ 
+      type: 'start', 
+      track: track || this.config.audioFile,
+      startTime,
+      clientId: this.clientId
+    });
   }
 
   _emit(event, data) {
@@ -151,7 +448,15 @@ export class SyncAudio {
     }
   }
 
-  async startSync() {
+  // ============================================
+  // Public API - Simplified interface
+  // ============================================
+
+  /**
+   * Start synchronization (master only)
+   * @param {number} startTime - Optional start time in ms
+   */
+  async startSync(startTime) {
     if (!this.isMaster) {
       console.warn('Only master can start synchronization');
       return;
@@ -160,56 +465,222 @@ export class SyncAudio {
       console.warn('No audio file configured');
       return;
     }
-    const syncedStartTime = this.clockSync.getSyncedTime() + 1000;
-    this.websocket.send(JSON.stringify({ type: 'start', startTime: syncedStartTime }));
-    await this.audioPlayer.playAt(syncedStartTime, this.bluetoothLatency, this.config.latencyCompensation);
+    
+    const actualStartTime = startTime || this.clockSync.getSyncedTime() + 1000;
+    
+    if (this.config.mode === 'websocket') {
+      this.websocket.send(JSON.stringify({ type: 'start', startTime: actualStartTime }));
+    } else {
+      this._broadcastStart(this.config.audioFile, actualStartTime);
+    }
+    
+    await this.audioPlayer.playAt(actualStartTime, this.bluetoothLatency, this.config.latencyCompensation);
+    this._isPlaying = true;
     this._emit('play');
   }
 
-  async stopSync() {
-    if (this.audioPlayer) this.audioPlayer.stop();
-    this.websocket.send(JSON.stringify({ type: 'stop' }));
-    this._emit('stop');
+  /**
+   * Play or resume audio
+   */
+  async play() {
+    if (!this.audioPlayer) {
+      console.warn('No audio file configured');
+      return;
+    }
+    
+    if (this.config.mode === 'websocket') {
+      this.websocket.send(JSON.stringify({ type: 'play' }));
+    } else {
+      this._broadcastPlay();
+    }
+    
+    await this.audioPlayer.play();
+    this._isPlaying = true;
+    this._emit('play');
   }
 
-  async pauseSync() {
-    if (this.audioPlayer) this.audioPlayer.pause();
-    this.websocket.send(JSON.stringify({ type: 'pause' }));
+  /**
+   * Pause audio
+   */
+  async pause() {
+    if (!this.audioPlayer) {
+      console.warn('No audio file configured');
+      return;
+    }
+    
+    if (this.config.mode === 'websocket') {
+      this.websocket.send(JSON.stringify({ type: 'pause' }));
+    } else {
+      this._broadcastPause();
+    }
+    
+    this.audioPlayer.pause();
+    this._isPlaying = false;
     this._emit('pause');
   }
 
-  setAudioFile(audioFile) {
-    this.config.audioFile = audioFile;
-    this._initAudioPlayer();
+  /**
+   * Stop audio and reset to beginning
+   */
+  async stop() {
+    if (!this.audioPlayer) {
+      console.warn('No audio file configured');
+      return;
+    }
+    
+    if (this.config.mode === 'websocket') {
+      this.websocket.send(JSON.stringify({ type: 'stop' }));
+    } else {
+      this._broadcastStop();
+    }
+    
+    this.audioPlayer.stop();
+    this._isPlaying = false;
+    this._emit('stop');
   }
 
-  setSessionAlias(alias) {
-    this.config.sessionAlias = alias;
-    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-      this.websocket.send(JSON.stringify({ type: 'set-alias', alias }));
+  /**
+   * Seek to specific time
+   * @param {number} time - Time in seconds
+   */
+  seek(time) {
+    if (!this.audioPlayer) {
+      console.warn('No audio file configured');
+      return;
+    }
+    
+    this.audioPlayer.setTime(time);
+    
+    if (this.isMaster) {
+      if (this.config.mode === 'websocket') {
+        this.websocket.send(JSON.stringify({ type: 'seek', time, clientId: this.clientId }));
+      } else {
+        this._broadcastSeek(time);
+      }
     }
   }
 
+  /**
+   * Set audio file
+   * @param {string} audioFile - URL of audio file
+   */
+  setAudioFile(audioFile) {
+    this.config.audioFile = audioFile;
+    if (this.audioPlayer) {
+      this.audioPlayer.setFile(audioFile);
+    }
+    
+    // Notify others
+    if (this.isMaster) {
+      if (this.config.mode === 'websocket') {
+        this.websocket.send(JSON.stringify({ type: 'track-change', track: audioFile }));
+      } else {
+        this._broadcast({ type: 'track-change', track: audioFile, clientId: this.clientId });
+      }
+    }
+  }
+
+  /**
+   * Set session alias
+   * @param {string} alias - Session alias
+   */
+  setSessionAlias(alias) {
+    this.config.sessionAlias = alias;
+    if (this.config.mode === 'websocket' && this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+      this.websocket.send(JSON.stringify({ type: 'set-alias', alias }));
+    } else if (this.broadcastChannel) {
+      this._broadcast({ type: 'set-alias', alias, clientId: this.clientId });
+    }
+  }
+
+  /**
+   * Get current playback time
+   * @returns {number} Current time in seconds
+   */
+  getCurrentTime() {
+    return this.audioPlayer ? this.audioPlayer.getCurrentTime() : 0;
+  }
+
+  /**
+   * Get audio duration
+   * @returns {number} Duration in seconds
+   */
+  getDuration() {
+    return this.audioPlayer ? this.audioPlayer.getDuration() : 0;
+  }
+
+  /**
+   * Check if currently playing
+   * @returns {boolean}
+   */
+  isPlaying() {
+    return this._isPlaying;
+  }
+
+  /**
+   * Check if currently seeking
+   * @returns {boolean}
+   */
+  isSeeking() {
+    return this._isSeeking;
+  }
+
+  /**
+   * Get client ID
+   * @returns {string}
+   */
   getClientId() {
     return this.clientId;
   }
 
+  /**
+   * Get Bluetooth latency
+   * @returns {number}
+   */
   getBluetoothLatency() {
     return this.bluetoothLatency;
   }
 
+  /**
+   * Get clock offset
+   * @returns {number}
+   */
   getClockOffset() {
     return this.clockSync ? this.clockSync.getClockOffset() : 0;
   }
 
+  /**
+   * Get synced time
+   * @returns {number}
+   */
   getSyncedTime() {
     return this.clockSync ? this.clockSync.getSyncedTime() : Date.now();
   }
 
+  /**
+   * Get current sessions
+   * @returns {Array} Array of session objects
+   */
+  getSessions() {
+    return Array.from(this.sessions.values());
+  }
+
+  /**
+   * Check if current client is master
+   * @returns {boolean}
+   */
+  isMasterClient() {
+    return this.isMaster;
+  }
+
+  /**
+   * Clean up resources
+   */
   destroy() {
     if (this.audioPlayer) this.audioPlayer.destroy();
     if (this.clockSync) this.clockSync.destroy();
     if (this.websocket) this.websocket.close();
+    if (this.broadcastChannel) this.broadcastChannel.close();
     this._listeners = {};
   }
 }
