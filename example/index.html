@@ -21,6 +21,7 @@
         }
         .master { background-color: #d4edda; color: #155724; }
         .slave { background-color: #fff3cd; color: #856404; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
         .controls {
             margin: 30px 0;
         }
@@ -37,7 +38,7 @@
             background-color: #f8f9fa;
             border-radius: 5px;
         }
-        #audioPlayer { margin-top: 20px; }
+        #audioPlayer { margin-top: 20px; width: 100%; }
         .section {
             margin: 20px 0;
             padding: 15px;
@@ -93,19 +94,63 @@
             color: #856404;
             font-style: italic;
             font-size: 0.9em;
+            background-color: #fff3cd;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 10px 0;
         }
         .success {
             color: #155724;
             font-size: 0.9em;
+            background-color: #d4edda;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 10px 0;
         }
-        .bluetooth-section {
-            border-color: #0066cc;
-            background-color: #f8f9ff;
+        .error {
+            color: #721c24;
+            font-size: 0.9em;
+            background-color: #f8d7da;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .server-info {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        .music-selector {
+            margin: 15px 0;
+        }
+        .music-selector select {
+            width: 100%;
+            padding: 8px;
+            font-size: 16px;
+        }
+        .track-info {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
         }
     </style>
 </head>
 <body>
     <h1>SyncAudio Demo</h1>
+    
+    <!-- Server Connection Info -->
+    <div class="section" id="serverSection">
+        <h2>⚡ Server Connection</h2>
+        <div id="serverStatus" class="server-info">
+            <p>To enable multi-device sync, you need to run a WebSocket server.</p>
+            <p><strong>For local testing:</strong> Run <code>npm start</code> in the project directory, then open <code>http://localhost:8080/example/</code> in multiple tabs.</p>
+            <p><strong>For GitHub Pages:</strong> WebSocket connection will fail (static hosting only). Use local server for full functionality.</p>
+        </div>
+        <div id="websocketStatus" style="display: none;">
+            <p>WebSocket: <span id="wsStatus">Connecting...</span></p>
+        </div>
+    </div>
     
     <!-- Session Information -->
     <div class="section">
@@ -119,27 +164,14 @@
     <div class="section">
         <h2>Connected Sessions (<span id="sessionCount">0</span>)</h2>
         <ul id="sessionList" class="session-list">
-            <li>No sessions connected yet</li>
+            <li>No sessions connected yet (WebSocket required)</li>
         </ul>
     </div>
     
-    <!-- Bluetooth Devices -->
-    <div class="section bluetooth-section">
-        <h2>📡 Bluetooth Audio Devices</h2>
-        <p class="warning" id="bluetoothWarning">Bluetooth device detection requires permission. Click below to request access.</p>
-        <p class="success" id="bluetoothSuccess" style="display: none;">Bluetooth access granted! Select a device below.</p>
-        <button id="requestBluetoothBtn" style="margin: 10px 0;">Request Bluetooth Access</button>
-        <select id="bluetoothDeviceSelector" style="width: 100%; padding: 8px; margin: 10px 0; display: none;">
-            <option value="">Select a Bluetooth device</option>
-        </select>
-        <ul id="bluetoothDeviceList" class="device-list">
-            <li>Bluetooth devices will appear here after granting permission</li>
-        </ul>
-    </div>
-    
-    <!-- All Audio Devices -->
+    <!-- Audio Devices -->
     <div class="section">
-        <h2>🔊 All Audio Output Devices</h2>
+        <h2>🔊 Audio Output Devices</h2>
+        <p class="server-info">Select your output device. Bluetooth devices already connected will appear here.</p>
         <select id="deviceSelector" style="width: 100%; padding: 8px; margin: 10px 0;">
             <option value="">Default device</option>
         </select>
@@ -148,11 +180,29 @@
         </ul>
     </div>
     
-    <div id="status" class="status">Connecting...</div>
+    <!-- Music Selection -->
+    <div class="section">
+        <h2>🎵 Music Track</h2>
+        <div class="music-selector">
+            <select id="musicSelector" style="width: 100%; padding: 8px;">
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">SoundHelix - Song 1 (Electronic)</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3">SoundHelix - Song 2 (Chill)</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3">SoundHelix - Song 3 (Upbeat)</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3">SoundHelix - Song 4 (Relaxing)</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3">SoundHelix - Song 5 (Energetic)</option>
+                <option value="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3">Bell Ringing (Short Test)</option>
+                <option value="https://www.soundjay.com/misc/sounds/phone-ring-01.mp3">Phone Ring (Short Test)</option>
+            </select>
+        </div>
+        <p class="track-info">All tracks are royalty-free from SoundHelix and SoundJay</p>
+    </div>
+    
+    <div id="status" class="status disconnected">Disconnected</div>
     <div class="controls">
         <button id="startBtn" disabled>Start Sync</button>
         <button id="pauseBtn" disabled>Pause</button>
         <button id="stopBtn" disabled>Stop</button>
+        <button id="testBtn">Test Audio</button>
     </div>
     <div class="info">
         <p>Bluetooth Latency: <span id="bluetoothLatency">Measuring...</span> ms</p>
@@ -164,9 +214,9 @@
     <script src="../dist/index.js"></script>
     <script>
         // Session alias generator
-        const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy', 'Jolly', 'Brave', 'Silent', 'Noisy', 'Wise'];
-        const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime', 'Teal', 'Navy', 'Maroon', 'Olive', 'Silver'];
-        const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala', 'Zebra', 'Giraffe', 'Penguin', 'Kangaroo', 'Octopus'];
+        const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy', 'Jolly', 'Brave', 'Silent', 'Noisy', 'Wise', 'Playful', 'Creative', 'Bold', 'Gentle', 'Fierce'];
+        const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime', 'Teal', 'Navy', 'Maroon', 'Olive', 'Silver', 'Gold', 'Black', 'White', 'Gray', 'Violet'];
+        const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala', 'Zebra', 'Giraffe', 'Penguin', 'Kangaroo', 'Octopus', 'Rabbit', 'Deer', 'Swan', 'Hawk', 'Whale'];
         
         function generateAlias() {
             const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
@@ -184,18 +234,47 @@
             return alias;
         }
         
-        const audioFile = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+        // Music tracks - royalty-free
+        const musicTracks = {
+            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3': 'SoundHelix - Song 1 (Electronic)',
+            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3': 'SoundHelix - Song 2 (Chill)',
+            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3': 'SoundHelix - Song 3 (Upbeat)',
+            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3': 'SoundHelix - Song 4 (Relaxing)',
+            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3': 'SoundHelix - Song 5 (Energetic)',
+            'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3': 'Bell Ringing (Short)',
+            'https://www.soundjay.com/misc/sounds/phone-ring-01.mp3': 'Phone Ring (Short)'
+        };
+        
         const sessionAlias = getOrCreateAlias();
         let clientId = null;
         let currentDeviceId = null;
-        let bluetoothDevices = [];
+        let audioSync = null;
+        let isWebSocketConnected = false;
         
         // Update session alias display
         document.getElementById('sessionAlias').textContent = sessionAlias;
         
-        // Check if Bluetooth is available
-        function isBluetoothAvailable() {
-            return 'bluetooth' in navigator;
+        // Check if we're on GitHub Pages
+        function isGitHubPages() {
+            return window.location.hostname.includes('github.io');
+        }
+        
+        // Check if we're on localhost
+        function isLocalhost() {
+            return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        }
+        
+        // Get WebSocket URL based on environment
+        function getWebSocketUrl() {
+            if (isLocalhost()) {
+                return 'ws://' + window.location.hostname + ':8080';
+            } else if (isGitHubPages()) {
+                // GitHub Pages doesn't support WebSocket, show warning
+                return null;
+            } else {
+                // For other cases, try to use relative path
+                return 'ws://' + window.location.hostname + ':8080';
+            }
         }
         
         // List all audio devices
@@ -224,12 +303,14 @@
                     const li = document.createElement('li');
                     const label = device.label || `Device ${device.deviceId.substring(0, 8)}`;
                     
-                    // Check if this might be a Bluetooth device (based on label)
+                    // Check if this might be a Bluetooth device
                     const isBluetooth = label.toLowerCase().includes('bluetooth') || 
                                        device.deviceId.toLowerCase().includes('bluetooth') ||
-                                       device.label.toLowerCase().includes('wireless') ||
-                                       device.label.toLowerCase().includes('headphones') ||
-                                       device.label.toLowerCase().includes('earbuds');
+                                       label.toLowerCase().includes('wireless') ||
+                                       label.toLowerCase().includes('headphones') ||
+                                       label.toLowerCase().includes('earbuds') ||
+                                       label.toLowerCase().includes('airpods') ||
+                                       label.toLowerCase().includes('air pods');
                     
                     if (isBluetooth) {
                         li.innerHTML = `<span class="bluetooth-icon">📡</span> ${label}`;
@@ -253,16 +334,16 @@
                             if (audioElement.setSinkId) {
                                 await audioElement.setSinkId(currentDeviceId);
                                 console.log(`Audio output set to: ${currentDeviceId}`);
+                                // Update active state in list
+                                document.querySelectorAll('#deviceList li').forEach(li => {
+                                    li.classList.remove('active');
+                                });
+                                const activeIndex = audioOutputs.findIndex(d => d.deviceId === currentDeviceId);
+                                if (activeIndex >= 0) {
+                                    document.querySelectorAll('#deviceList li')[activeIndex].classList.add('active');
+                                }
                             } else {
                                 console.warn('setSinkId not supported in this browser');
-                            }
-                            // Update active state in list
-                            document.querySelectorAll('#deviceList li').forEach(li => {
-                                li.classList.remove('active');
-                            });
-                            const activeIndex = audioOutputs.findIndex(d => d.deviceId === currentDeviceId);
-                            if (activeIndex >= 0) {
-                                document.querySelectorAll('#deviceList li')[activeIndex].classList.add('active');
                             }
                         } catch (error) {
                             console.error('Failed to set audio device:', error);
@@ -276,160 +357,167 @@
             }
         }
         
-        // Request Bluetooth access and list Bluetooth devices
-        async function requestBluetoothAccess() {
-            const btn = document.getElementById('requestBluetoothBtn');
-            const warning = document.getElementById('bluetoothWarning');
-            const success = document.getElementById('bluetoothSuccess');
-            const bluetoothSelector = document.getElementById('bluetoothDeviceSelector');
-            const bluetoothList = document.getElementById('bluetoothDeviceList');
+        // Initialize audio sync
+        function initAudioSync() {
+            const wsUrl = getWebSocketUrl();
+            const musicSelector = document.getElementById('musicSelector');
+            const selectedTrack = musicSelector.value;
             
-            if (!isBluetoothAvailable()) {
-                warning.textContent = 'Bluetooth API is not available in this browser.';
-                btn.style.display = 'none';
-                return;
+            if (!wsUrl) {
+                // GitHub Pages - no WebSocket support
+                document.getElementById('serverStatus').innerHTML = `
+                    <p class="warning">⚠️ You're on GitHub Pages (static hosting). WebSocket is not available.</p>
+                    <p><strong>To test multi-device sync:</strong></p>
+                    <ol>
+                        <li>Clone the repository: <code>git clone https://github.com/arcodange-org/sync-audio-js.git</code></li>
+                        <li>Install dependencies: <code>cd sync-audio-js && npm install</code></li>
+                        <li>Start the server: <code>npm start</code></li>
+                        <li>Open <code>http://localhost:8080/example/</code> in multiple browser tabs</li>
+                    </ol>
+                    <p>You can still test audio playback locally with the "Test Audio" button.</p>
+                `;
+                document.getElementById('websocketStatus').style.display = 'none';
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').textContent = 'Static Mode (No Sync)';
+                
+                // Still allow local audio testing
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('pauseBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+                
+                return null;
             }
+            
+            // Show WebSocket status
+            document.getElementById('websocketStatus').style.display = 'block';
+            document.getElementById('wsStatus').textContent = 'Connecting...';
             
             try {
-                btn.disabled = true;
-                btn.textContent = 'Requesting...';
-                
-                // Request Bluetooth device with valid service UUIDs
-                // For audio devices, we use the Generic Audio service or skip service filter
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    // Optional services - using standard Bluetooth service UUIDs
-                    // For audio, we can omit this or use generic UUIDs
-                    optionalServices: []
+                const audioSync = new SyncAudio({
+                    websocketUrl: wsUrl,
+                    audioFile: selectedTrack,
+                    autoStart: false,
+                    autoMeasureLatency: true,
+                    sessionAlias: sessionAlias
                 });
                 
-                console.log('Bluetooth device selected:', device);
-                
-                // Store the device
-                bluetoothDevices = [device];
-                
-                // Update UI
-                warning.style.display = 'none';
-                success.style.display = 'block';
-                btn.style.display = 'none';
-                bluetoothSelector.style.display = 'block';
-                
-                // Add to selector
-                const option = document.createElement('option');
-                option.value = device.id || device.deviceId;
-                option.textContent = device.name || `Bluetooth Device ${(device.id || device.deviceId).substring(0, 8)}`;
-                bluetoothSelector.appendChild(option);
-                
-                // Add to list
-                bluetoothList.innerHTML = '';
-                const li = document.createElement('li');
-                li.classList.add('bluetooth');
-                li.innerHTML = `<span class="bluetooth-icon">📡</span> ${device.name || device.id} <span class="client-id">[${(device.id || device.deviceId).substring(0, 8)}]</span>`;
-                bluetoothList.appendChild(li);
-                
-                // Set up selector change
-                bluetoothSelector.addEventListener('change', async (e) => {
-                    const selectedId = e.target.value;
-                    if (selectedId) {
-                        try {
-                            const audioElement = document.getElementById('audioPlayer');
-                            if (audioElement.setSinkId) {
-                                await audioElement.setSinkId(selectedId);
-                                console.log(`Bluetooth audio set to: ${selectedId}`);
-                            }
-                        } catch (error) {
-                            console.error('Failed to set Bluetooth device:', error);
-                        }
-                    }
-                });
+                return audioSync;
                 
             } catch (error) {
-                console.error('Bluetooth request failed:', error);
-                btn.disabled = false;
-                btn.textContent = 'Request Bluetooth Access';
-                if (error.name === 'NotAllowedError') {
-                    warning.textContent = 'Bluetooth access was denied. Please allow Bluetooth access to see devices.';
-                } else {
-                    warning.textContent = `Error: ${error.message}`;
-                }
-            }
-        }
-        
-        // Check for setSinkId support
-        async function checkSinkIdSupport() {
-            const audioElement = document.getElementById('audioPlayer');
-            if (!audioElement.setSinkId) {
-                console.log('setSinkId not supported - device selection may not work');
+                console.error('Failed to initialize SyncAudio:', error);
+                document.getElementById('wsStatus').textContent = 'Failed to connect';
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').textContent = 'Connection Failed';
+                return null;
             }
         }
         
         // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            // Check Bluetooth availability
-            if (!isBluetoothAvailable()) {
-                document.getElementById('requestBluetoothBtn').style.display = 'none';
-                document.getElementById('bluetoothWarning').textContent = 'Bluetooth API not available in this browser. Try Chrome or Edge.';
-            } else {
-                document.getElementById('requestBluetoothBtn').addEventListener('click', requestBluetoothAccess);
-            }
-            
-            // List regular audio devices
+        document.addEventListener('DOMContentLoaded', async () => {
+            // List audio devices
             if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-                listAudioDevices();
-                checkSinkIdSupport();
+                await listAudioDevices();
             } else {
                 document.getElementById('deviceList').innerHTML = '<li>Device enumeration not supported in this browser</li>';
             }
+            
+            // Initialize audio sync
+            audioSync = initAudioSync();
+            
+            // Set up music selector
+            document.getElementById('musicSelector').addEventListener('change', (e) => {
+                const selectedTrack = e.target.value;
+                if (audioSync) {
+                    audioSync.setAudioFile(selectedTrack);
+                }
+            });
+            
+            // Set up test button
+            document.getElementById('testBtn').addEventListener('click', async () => {
+                const audioElement = document.getElementById('audioPlayer');
+                const selectedTrack = document.getElementById('musicSelector').value;
+                
+                try {
+                    audioElement.src = selectedTrack;
+                    await audioElement.play();
+                    console.log('Test audio playing');
+                } catch (error) {
+                    console.error('Failed to play test audio:', error);
+                    alert('Failed to play audio. Make sure you have interacted with the page first (browser autoplay policy).');
+                }
+            });
+            
+            // Set up control buttons (will be enabled when connected)
+            document.getElementById('startBtn').addEventListener('click', () => {
+                if (audioSync) audioSync.startSync();
+            });
+            
+            document.getElementById('pauseBtn').addEventListener('click', () => {
+                if (audioSync) audioSync.pauseSync();
+            });
+            
+            document.getElementById('stopBtn').addEventListener('click', () => {
+                if (audioSync) audioSync.stopSync();
+            });
         });
         
-        const audioSync = new SyncAudio({
-            websocketUrl: 'ws://' + window.location.hostname + ':8080',
-            audioFile: audioFile,
-            autoStart: false,
-            autoMeasureLatency: true,
-            sessionAlias: sessionAlias
-        });
+        // Handle audio sync events (only if audioSync exists)
+        function setupAudioSyncEvents() {
+            if (!audioSync) return;
+            
+            audioSync.on('ready', ({ isMaster, bluetoothLatency }) => {
+                isWebSocketConnected = true;
+                document.getElementById('wsStatus').textContent = 'Connected';
+                document.getElementById('status').textContent = isMaster ? 'Master' : 'Slave';
+                document.getElementById('status').className = isMaster ? 'status master' : 'status slave';
+                document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
+                document.getElementById('bluetoothLatency').textContent = bluetoothLatency;
+                document.getElementById('startBtn').disabled = !isMaster;
+                document.getElementById('pauseBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = false;
+            });
 
-        audioSync.on('ready', ({ isMaster, bluetoothLatency }) => {
-            document.getElementById('status').textContent = isMaster ? 'Master' : 'Slave';
-            document.getElementById('status').className = isMaster ? 'status master' : 'status slave';
-            document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
-            document.getElementById('bluetoothLatency').textContent = bluetoothLatency;
-            document.getElementById('startBtn').disabled = !isMaster;
-            document.getElementById('pauseBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = false;
-        });
+            audioSync.on('role', ({ role, clientId: cid }) => {
+                clientId = cid;
+                document.getElementById('clientId').textContent = cid || 'Unknown';
+                document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
+                document.getElementById('role').className = role === 'master' ? 'role-master' : 'role-slave';
+            });
 
-        audioSync.on('role', ({ role, clientId: cid }) => {
-            clientId = cid;
-            document.getElementById('clientId').textContent = cid || 'Unknown';
-            document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
-            document.getElementById('role').className = role === 'master' ? 'role-master' : 'role-slave';
-        });
+            audioSync.on('bluetooth-latency', ({ latency }) => {
+                document.getElementById('bluetoothLatency').textContent = latency;
+            });
 
-        audioSync.on('bluetooth-latency', ({ latency }) => {
-            document.getElementById('bluetoothLatency').textContent = latency;
-        });
+            audioSync.on('clock-sync', ({ offset }) => {
+                document.getElementById('clockOffset').textContent = offset.toFixed(2);
+            });
 
-        audioSync.on('clock-sync', ({ offset }) => {
-            document.getElementById('clockOffset').textContent = offset.toFixed(2);
-        });
+            audioSync.on('session-update', ({ sessions }) => {
+                updateSessionListFromServer(sessions);
+            });
 
-        audioSync.on('session-update', ({ sessions }) => {
-            updateSessionListFromServer(sessions);
-        });
+            audioSync.on('play', () => {
+                console.log('Audio started playing');
+            });
 
-        audioSync.on('play', () => {
-            console.log('Audio started playing');
-        });
+            audioSync.on('pause', () => {
+                console.log('Audio paused');
+            });
 
-        audioSync.on('pause', () => {
-            console.log('Audio paused');
-        });
+            audioSync.on('stop', () => {
+                console.log('Audio stopped');
+            });
 
-        audioSync.on('stop', () => {
-            console.log('Audio stopped');
-        });
+            audioSync.on('disconnect', () => {
+                isWebSocketConnected = false;
+                document.getElementById('wsStatus').textContent = 'Disconnected';
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').textContent = 'Disconnected';
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('pauseBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+            });
+        }
 
         // Track sessions
         function updateSessionListFromServer(sessions) {
@@ -458,21 +546,12 @@
             sessionCount.textContent = count;
             
             if (count === 0) {
-                sessionList.innerHTML = '<li>No sessions connected yet</li>';
+                sessionList.innerHTML = '<li>No sessions connected yet (WebSocket required)</li>';
             }
         }
-
-        document.getElementById('startBtn').addEventListener('click', () => {
-            audioSync.startSync();
-        });
-
-        document.getElementById('pauseBtn').addEventListener('click', () => {
-            audioSync.pauseSync();
-        });
-
-        document.getElementById('stopBtn').addEventListener('click', () => {
-            audioSync.stopSync();
-        });
+        
+        // Setup events after audioSync is created
+        setTimeout(setupAudioSyncEvents, 1000);
     </script>
 </body>
 </html>
