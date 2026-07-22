@@ -3,245 +3,451 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SyncAudio Demo</title>
+    <title>SyncAudio Demo - Synchronized Audio Playback</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             text-align: center;
+            background-color: #f5f7fa;
+            color: #333;
         }
-        h1 { color: #333; }
-        .status {
-            margin: 20px 0;
-            padding: 10px;
-            border-radius: 5px;
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            color: #34495e;
+            font-size: 1.3em;
+            margin-top: 0;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 0.95em;
+            margin-bottom: 30px;
+        }
+        
+        .status-badge {
             display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin: 5px;
         }
-        .master { background-color: #d4edda; color: #155724; }
-        .slave { background-color: #fff3cd; color: #856404; }
-        .disconnected { background-color: #f8d7da; color: #721c24; }
-        .controls {
-            margin: 30px 0;
+        
+        .status-master {
+            background-color: #d4edda;
+            color: #155724;
         }
-        button {
-            padding: 10px 20px;
-            margin: 0 10px;
-            font-size: 16px;
-            cursor: pointer;
+        
+        .status-slave {
+            background-color: #fff3cd;
+            color: #856404;
         }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .info {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
+        
+        .status-disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
         }
-        #audioPlayer { margin-top: 20px; width: 100%; }
+        
         .section {
+            background: white;
             margin: 20px 0;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
             text-align: left;
         }
+        
         .section h2 {
             margin-top: 0;
-            color: #555;
-            font-size: 18px;
-        }
-        .device-list, .session-list {
-            list-style: none;
-            padding: 0;
-        }
-        .device-list li, .session-list li {
-            padding: 8px 12px;
-            margin: 5px 0;
-            background-color: #f0f0f0;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        .device-list li:hover, .session-list li:hover {
-            background-color: #e9ecef;
-        }
-        .device-list li.active, .session-list li.active {
-            background-color: #d4edda;
-            font-weight: bold;
-        }
-        .device-list li.bluetooth, .session-list li.bluetooth {
-            background-color: #e7f3ff;
-            border-left: 3px solid #0066cc;
-        }
-        .alias {
-            font-weight: bold;
             color: #2c3e50;
-            font-size: 1.2em;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
         }
-        .client-id {
-            font-size: 0.8em;
-            color: #666;
-            font-family: monospace;
+        
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            justify-content: center;
         }
-        .role-master {
-            color: #155724;
-            font-weight: bold;
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
-        .role-slave {
-            color: #856404;
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
-        .bluetooth-icon {
-            color: #0066cc;
-            margin-right: 5px;
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
-        .warning {
-            color: #856404;
-            font-style: italic;
-            font-size: 0.9em;
-            background-color: #fff3cd;
-            padding: 8px;
-            border-radius: 4px;
-            margin: 10px 0;
+        
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
         }
-        .success {
-            color: #155724;
-            font-size: 0.9em;
-            background-color: #d4edda;
-            padding: 8px;
-            border-radius: 4px;
-            margin: 10px 0;
+        
+        .btn-success {
+            background-color: #2ecc71;
+            color: white;
         }
-        .error {
-            color: #721c24;
-            font-size: 0.9em;
-            background-color: #f8d7da;
-            padding: 8px;
-            border-radius: 4px;
-            margin: 10px 0;
+        
+        .btn-warning {
+            background-color: #f39c12;
+            color: white;
         }
-        .server-info {
-            font-size: 0.85em;
-            color: #666;
-            margin-top: 10px;
-            font-style: italic;
+        
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
         }
-        .music-selector {
+        
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+        
+        .device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
             margin: 15px 0;
         }
-        .music-selector select {
-            width: 100%;
-            padding: 8px;
-            font-size: 16px;
+        
+        .device-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: white;
         }
-        .track-info {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
+        
+        .device-card:hover {
+            border-color: #3498db;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
         }
-        .connection-mode {
+        
+        .device-card.selected {
+            border-color: #2ecc71;
+            background-color: #f8fff9;
+        }
+        
+        .device-card.bluetooth {
+            border-left: 4px solid #3498db;
+        }
+        
+        .device-name {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            font-size: 1.05em;
+        }
+        
+        .device-id {
+            font-size: 0.75em;
+            color: #95a5a6;
+            font-family: monospace;
+            word-break: break-all;
+            margin-bottom: 8px;
+        }
+        
+        .device-meta {
             display: flex;
-            gap: 10px;
+            gap: 15px;
+            font-size: 0.85em;
+            color: #7f8c8d;
+            margin-top: 10px;
+        }
+        
+        .device-latency {
+            color: #e67e22;
+        }
+        
+        .bluetooth-icon {
+            color: #3498db;
+            margin-right: 5px;
+        }
+        
+        .mode-selector {
+            display: flex;
+            gap: 15px;
             margin: 15px 0;
             flex-wrap: wrap;
         }
-        .mode-option {
+        
+        .mode-card {
             flex: 1;
             min-width: 200px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: white;
         }
-        .mode-option button {
-            width: 100%;
-            padding: 12px;
-            font-size: 14px;
+        
+        .mode-card:hover {
+            border-color: #3498db;
         }
-        .mode-option button.active {
-            background-color: #007bff;
-            color: white;
-            border: none;
+        
+        .mode-card.active {
+            border-color: #3498db;
+            background-color: #f0f8ff;
         }
-        .mode-option button:disabled {
-            opacity: 0.7;
+        
+        .mode-card h3 {
+            margin-top: 0;
+            color: #2c3e50;
         }
-        .webrtc-info {
-            background-color: #e7f3ff;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
+        
+        .mode-card p {
+            margin-bottom: 0;
+            color: #7f8c8d;
             font-size: 0.9em;
         }
+        
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 16px;
+            background: white;
+            margin: 10px 0;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
         .seek-controls {
             display: flex;
-            gap: 10px;
-            margin: 15px 0;
+            gap: 15px;
             align-items: center;
+            margin: 20px 0;
         }
+        
         .seek-controls input[type="range"] {
             flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #ecf0f1;
+            outline: none;
+            -webkit-appearance: none;
         }
+        
+        .seek-controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+        
         .time-display {
             font-family: monospace;
             font-size: 14px;
-            min-width: 80px;
+            min-width: 70px;
             text-align: center;
+            color: #7f8c8d;
         }
-        .network-controls {
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
             margin: 15px 0;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
         }
-        .network-controls h3 {
-            margin-top: 0;
-            font-size: 16px;
+        
+        .info-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
         }
-        .network-controls label {
+        
+        .info-item .label {
+            font-size: 0.85em;
+            color: #7f8c8d;
             display: block;
-            margin: 8px 0 4px;
-            font-weight: bold;
+            margin-bottom: 4px;
         }
-        .network-controls input {
+        
+        .info-item .value {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .session-list {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        
+        .session-item {
+            padding: 10px 12px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .session-item.current {
+            background: #d4edda;
+            border-left: 3px solid #2ecc71;
+        }
+        
+        .session-alias {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .session-role {
+            font-size: 0.85em;
+            padding: 3px 8px;
+            border-radius: 12px;
+        }
+        
+        .role-master {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .role-slave {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        audio {
             width: 100%;
-            padding: 6px;
+            margin: 15px 0;
+            border-radius: 8px;
         }
-        .simulate-btn {
-            background-color: #dc3545;
-            color: white;
-            border: none;
+        
+        .server-info {
+            background: #fff8e1;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 4px solid #ffc107;
         }
-        .simulate-btn:hover {
-            background-color: #c82333;
+        
+        .server-info h4 {
+            margin-top: 0;
+            color: #e65100;
         }
-        .play-pause-btn {
-            background-color: #28a745;
-            color: white;
-            border: none;
+        
+        .server-info ol {
+            text-align: left;
+            padding-left: 20px;
         }
-        .play-pause-btn:hover {
-            background-color: #218838;
+        
+        .server-info code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        
+        .feature-badges {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        
+        .badge {
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        .badge-supported {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-not-supported {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            button {
+                width: 100%;
+            }
+            
+            .mode-selector {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>SyncAudio Demo</h1>
+    <h1>🎵 SyncAudio</h1>
+    <p class="subtitle">Synchronized audio playback across multiple devices with Bluetooth latency compensation</p>
+    
+    <!-- Feature Support Badges -->
+    <div class="feature-badges" id="featureBadges">
+        <span class="badge badge-supported">✓ BroadcastChannel</span>
+        <span class="badge" id="setSinkIdBadge">Checking...</span>
+        <span class="badge" id="enumerateDevicesBadge">Checking...</span>
+    </div>
     
     <!-- Connection Mode Selection -->
     <div class="section">
-        <h2>Connection Mode</h2>
+        <h2>📡 Connection Mode</h2>
         <p>Choose how to synchronize audio between devices:</p>
-        <div class="connection-mode">
-            <div class="mode-option">
-                <button id="localModeBtn" class="active">Local Mode (Same Browser)</button>
-                <p style="font-size: 0.8em; margin-top: 5px;">Sync tabs in the same browser using BroadcastChannel</p>
+        <div class="mode-selector">
+            <div class="mode-card active" data-mode="broadcast">
+                <h3>💻 Local Mode</h3>
+                <p>Sync tabs in the same browser using BroadcastChannel</p>
             </div>
-            <div class="mode-option">
-                <button id="serverModeBtn">Server Mode</button>
-                <p style="font-size: 0.8em; margin-top: 5px;">Requires local server (npm start)</p>
+            <div class="mode-card" data-mode="websocket">
+                <h3>🌐 Server Mode</h3>
+                <p>Sync across network using WebSocket (requires server)</p>
             </div>
         </div>
+        
         <div id="serverInfo" class="server-info" style="display: none;">
-            <p><strong>Server Mode Instructions:</strong></p>
-            <ol style="text-align: left;">
-                <li>Run: <code>git clone https://github.com/arcodange-org/sync-audio-js.git</code></li>
-                <li>Then: <code>cd sync-audio-js && npm install && npm start</code></li>
+            <h4>📋 Server Mode Setup</h4>
+            <ol>
+                <li>Clone: <code>git clone https://github.com/arcodange-org/sync-audio-js.git</code></li>
+                <li>Install: <code>cd sync-audio-js && npm install</code></li>
+                <li>Start: <code>npm start</code></li>
                 <li>Open: <code>http://localhost:8080/example/</code> in multiple tabs</li>
             </ol>
         </div>
@@ -249,105 +455,133 @@
     
     <!-- Session Information -->
     <div class="section">
-        <h2>Your Session</h2>
-        <p>Alias: <span id="sessionAlias" class="alias">Generating...</span></p>
-        <p>Client ID: <span id="clientId" class="client-id">Unknown</span></p>
-        <p>Role: <span id="role">Unknown</span></p>
-        <p>Status: <span id="syncStatus">Disconnected</span></p>
+        <h2>👤 Your Session</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="label">Alias</span>
+                <span class="value" id="sessionAlias">Loading...</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Client ID</span>
+                <span class="value" id="clientId">Unknown</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Role</span>
+                <span class="value"><span id="role">Unknown</span></span>
+            </div>
+            <div class="info-item">
+                <span class="label">Status</span>
+                <span class="value"><span id="syncStatus">Disconnected</span></span>
+            </div>
+        </div>
+        <div style="margin-top: 15px;">
+            <span class="status-badge status-disconnected" id="status">Disconnected</span>
+        </div>
     </div>
     
     <!-- Connected Sessions -->
     <div class="section">
-        <h2>Connected Sessions (<span id="sessionCount">0</span>)</h2>
+        <h2>👥 Connected Sessions (<span id="sessionCount">0</span>)</h2>
         <ul id="sessionList" class="session-list">
-            <li>No sessions connected yet</li>
+            <li class="session-item">No sessions connected yet</li>
         </ul>
     </div>
     
     <!-- Audio Devices -->
     <div class="section">
-        <h2>Audio Output Devices</h2>
-        <p class="server-info">Select your Bluetooth headphones or other audio device. Click on a device to select it.</p>
-        <ul id="deviceList" class="device-list">
-            <li>Detecting devices...</li>
-        </ul>
+        <h2>🎧 Audio Output Devices</h2>
+        <p style="color: #7f8c8d; margin-bottom: 15px;">
+            Select your audio output device. Bluetooth devices are highlighted in blue.
+        </p>
+        <div class="device-grid" id="deviceList">
+            <p style="grid-column: 1 / -1; text-align: center; color: #95a5a6;">
+                Detecting devices...
+            </p>
+        </div>
+        <div class="info-grid" style="margin-top: 15px;">
+            <div class="info-item">
+                <span class="label">Current Device</span>
+                <span class="value" id="currentDeviceName">None</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Device Latency</span>
+                <span class="value" id="currentDeviceLatency">0 ms</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Bluetooth Latency</span>
+                <span class="value" id="bluetoothLatency">N/A ms</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Clock Offset</span>
+                <span class="value" id="clockOffset">0 ms</span>
+            </div>
+        </div>
     </div>
     
     <!-- Music Selection -->
     <div class="section">
-        <h2>Music Track</h2>
-        <div class="music-selector">
-            <select id="musicSelector" style="width: 100%; padding: 8px;">
-                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">SoundHelix - Song 1 (Electronic)</option>
-                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3">SoundHelix - Song 2 (Chill)</option>
-                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3">SoundHelix - Song 3 (Upbeat)</option>
-                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3">SoundHelix - Song 4 (Relaxing)</option>
-                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3">SoundHelix - Song 5 (Energetic)</option>
-                <option value="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3">Bell Ringing (Short Test)</option>
-                <option value="https://www.soundjay.com/misc/sounds/phone-ring-01.mp3">Phone Ring (Short Test)</option>
-            </select>
-        </div>
-        <p class="track-info">All tracks are royalty-free from SoundHelix and SoundJay</p>
-    </div>
-    
-    <!-- Seek Controls -->
-    <div class="section">
-        <h2>Playback Controls</h2>
-        <div class="seek-controls">
-            <span class="time-display" id="currentTime">0:00</span>
-            <input type="range" id="seekSlider" min="0" max="100" value="0" style="flex: 1;">
-            <span class="time-display" id="duration">0:00</span>
-        </div>
-        <p class="server-info" style="margin-top: 10px;">
-            <strong>Seek Sync:</strong> Drag the slider to seek. Playback will pause during seeking and resume synchronized across all devices.
+        <h2>🎵 Music Track</h2>
+        <select id="musicSelector">
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">SoundHelix - Song 1 (Electronic)</option>
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3">SoundHelix - Song 2 (Chill)</option>
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3">SoundHelix - Song 3 (Upbeat)</option>
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3">SoundHelix - Song 4 (Relaxing)</option>
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3">SoundHelix - Song 5 (Energetic)</option>
+            <option value="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3">Bell Ringing (Short Test)</option>
+            <option value="https://www.soundjay.com/misc/sounds/phone-ring-01.mp3">Phone Ring (Short Test)</option>
+        </select>
+        <p style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">
+            All tracks are royalty-free from SoundHelix and SoundJay
         </p>
     </div>
     
-    <!-- Network Simulation -->
-    <div class="section network-controls">
-        <h3>Network Simulation (For Testing)</h3>
-        <label for="latencySim">Simulate Latency (ms):</label>
-        <input type="number" id="latencySim" min="0" max="5000" value="0" placeholder="0 = no latency">
-        
-        <label for="packetLoss">Simulate Packet Loss (%):</label>
-        <input type="number" id="packetLoss" min="0" max="100" value="0" placeholder="0 = no loss">
-        
-        <label for="jitterSim">Simulate Jitter (ms):</label>
-        <input type="number" id="jitterSim" min="0" max="1000" value="0" placeholder="0 = no jitter">
-        
-        <button id="simulateBtn" class="simulate-btn" style="margin-top: 10px;">Apply Network Conditions</button>
-        <p id="networkStatus" style="margin-top: 10px; font-size: 0.9em;"></p>
+    <!-- Playback Controls -->
+    <div class="section">
+        <h2>🎚️ Playback Controls</h2>
+        <div class="seek-controls">
+            <span class="time-display" id="currentTime">0:00</span>
+            <input type="range" id="seekSlider" min="0" max="100" value="0">
+            <span class="time-display" id="duration">0:00</span>
+        </div>
+        <div class="controls">
+            <button id="startBtn" class="btn-primary" disabled>
+                ▶️ Start Sync
+            </button>
+            <button id="playPauseBtn" class="btn-success" disabled>
+                ▶️ Play
+            </button>
+            <button id="stopBtn" class="btn-danger" disabled>
+                ⏹️ Stop
+            </button>
+            <button id="testBtn" class="btn-secondary">
+                🔊 Test Audio
+            </button>
+        </div>
+        <p style="color: #7f8c8d; font-size: 0.9em; margin-top: 10px;">
+            <strong>Tip:</strong> Drag the slider to seek. Playback will sync across all connected devices.
+        </p>
     </div>
-
-    <div id="status" class="status disconnected">Disconnected</div>
-    <div class="controls">
-        <button id="startBtn" disabled>Start Sync</button>
-        <button id="playPauseBtn" class="play-pause-btn" disabled>Play</button>
-        <button id="stopBtn" disabled>Stop</button>
-        <button id="testBtn">Test Audio</button>
-    </div>
-    <div class="info">
-        <p>Bluetooth Latency: <span id="bluetoothLatency">N/A</span> ms</p>
-        <p>Clock Offset: <span id="clockOffset">0</span> ms</p>
-        <p>Network Latency: <span id="networkLatency">0</span> ms</p>
-    </div>
+    
+    <!-- Audio Player -->
     <audio id="audioPlayer" controls></audio>
 
     <script src="https://arcodange-org.github.io/sync-audio-js/dist/index.js"></script>
     <script>
         // ============================================
-        // SIMPLIFIED CLIENT CODE USING NEW LIBRARY INTERFACE
+        // SyncAudio Demo - Updated with Bluetooth Device Management
         // ============================================
         
         let syncAudio = null;
         let currentMode = 'broadcast';
+        let currentDeviceId = null;
         
         // DOM Elements
-        const audioElement = document.getElementById('audioPlayer');
+        const audioPlayer = document.getElementById('audioPlayer');
         const musicSelector = document.getElementById('musicSelector');
         const seekSlider = document.getElementById('seekSlider');
         const currentTimeDisplay = document.getElementById('currentTime');
         const durationDisplay = document.getElementById('duration');
+        const deviceList = document.getElementById('deviceList');
         
         // Generate alias
         function generateAlias() {
@@ -358,6 +592,40 @@
             const color = colors[Math.floor(Math.random() * colors.length)];
             const animal = animals[Math.floor(Math.random() * animals.length)];
             return `${adj} ${color} ${animal}`;
+        }
+        
+        // Check browser support
+        function checkBrowserSupport() {
+            const setSinkIdSupported = SyncAudio.isSetSinkIdSupported();
+            const enumerateSupported = 'mediaDevices' in navigator;
+            
+            const setSinkIdBadge = document.getElementById('setSinkIdBadge');
+            const enumerateDevicesBadge = document.getElementById('enumerateDevicesBadge');
+            
+            setSinkIdBadge.textContent = setSinkIdSupported ? '✓ setSinkId' : '✗ setSinkId';
+            setSinkIdBadge.className = setSinkIdSupported ? 'badge badge-supported' : 'badge badge-not-supported';
+            
+            enumerateDevicesBadge.textContent = enumerateSupported ? '✓ enumerateDevices' : '✗ enumerateDevices';
+            enumerateDevicesBadge.className = enumerateSupported ? 'badge badge-supported' : 'badge badge-not-supported';
+            
+            if (!setSinkIdSupported) {
+                showNotification('Device selection not supported in your browser. Try Chrome, Edge, or Opera.', 'warning');
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `status-badge status-${type}`;
+            notification.textContent = message;
+            notification.style.display = 'block';
+            notification.style.margin = '10px auto';
+            notification.style.maxWidth = '600px';
+            document.body.insertBefore(notification, document.querySelector('.section'));
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 500);
+            }, 5000);
         }
         
         // Initialize SyncAudio with selected mode
@@ -380,10 +648,11 @@
                 autoStart: false,
                 autoMeasureLatency: true,
                 sessionAlias: alias,
-                autoMaster: true
+                autoMaster: true,
+                manageAudioDevices: true
             };
             
-            // Create instance
+            // Create new instance
             syncAudio = new SyncAudio(config);
             
             // Setup event listeners
@@ -398,35 +667,35 @@
         function setupEventListeners() {
             if (!syncAudio) return;
             
-            syncAudio.on('ready', ({ isMaster, bluetoothLatency, clientId }) => {
+            // Core events
+            syncAudio.on('ready', ({ isMaster, bluetoothLatency, clientId, audioDevices }) => {
                 document.getElementById('status').textContent = isMaster ? 'Master' : 'Slave';
-                document.getElementById('status').className = isMaster ? 'status master' : 'status slave';
+                document.getElementById('status').className = isMaster ? 'status-badge status-master' : 'status-badge status-slave';
                 document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
-                document.getElementById('role').className = isMaster ? 'role-master' : 'role-slave';
                 document.getElementById('clientId').textContent = clientId;
-                document.getElementById('bluetoothLatency').textContent = bluetoothLatency;
+                document.getElementById('bluetoothLatency').textContent = bluetoothLatency + ' ms';
                 document.getElementById('startBtn').disabled = !isMaster;
                 document.getElementById('playPauseBtn').disabled = false;
                 document.getElementById('stopBtn').disabled = false;
                 document.getElementById('syncStatus').textContent = 'Connected';
                 
                 updatePlayPauseButton();
+                refreshDeviceList();
             });
             
             syncAudio.on('role', ({ role, clientId }) => {
                 document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
-                document.getElementById('role').className = role === 'master' ? 'role-master' : 'role-slave';
                 document.getElementById('clientId').textContent = clientId;
                 document.getElementById('startBtn').disabled = role !== 'master';
                 updatePlayPauseButton();
             });
             
             syncAudio.on('bluetooth-latency', ({ latency }) => {
-                document.getElementById('bluetoothLatency').textContent = latency;
+                document.getElementById('bluetoothLatency').textContent = latency + ' ms';
             });
             
             syncAudio.on('clock-sync', ({ offset }) => {
-                document.getElementById('clockOffset').textContent = offset.toFixed(2);
+                document.getElementById('clockOffset').textContent = offset.toFixed(2) + ' ms';
             });
             
             syncAudio.on('session-update', ({ sessions }) => {
@@ -454,13 +723,34 @@
             });
             
             syncAudio.on('disconnect', () => {
-                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').className = 'status-badge status-disconnected';
                 document.getElementById('status').textContent = 'Disconnected';
                 document.getElementById('syncStatus').textContent = 'Disconnected';
                 document.getElementById('startBtn').disabled = true;
                 document.getElementById('playPauseBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = true;
                 updatePlayPauseButton();
+            });
+            
+            // Audio device events
+            syncAudio.on('audio-devices-updated', ({ devices, bluetoothDevices }) => {
+                renderDeviceList(devices, bluetoothDevices);
+            });
+            
+            syncAudio.on('audio-device-selected', ({ deviceId, device, latency, isBluetooth }) => {
+                currentDeviceId = deviceId;
+                updateCurrentDeviceInfo(device, latency, isBluetooth);
+            });
+            
+            syncAudio.on('device-latency-updated', ({ deviceId, latency }) => {
+                // Update UI if this is the current device
+                if (deviceId === currentDeviceId) {
+                    document.getElementById('currentDeviceLatency').textContent = latency + ' ms';
+                }
+            });
+            
+            syncAudio.on('device-error', ({ error }) => {
+                showNotification(error, 'error');
             });
             
             // Setup controls
@@ -481,14 +771,14 @@
             };
             
             document.getElementById('testBtn').onclick = () => {
-                audioElement.src = musicSelector.value;
-                audioElement.play().catch(e => {
+                audioPlayer.src = musicSelector.value;
+                audioPlayer.play().catch(e => {
                     console.error('Autoplay blocked:', e);
-                    alert('Browser autoplay policy: Please interact with the page first (click anywhere), then try again.');
+                    showNotification('Please interact with the page first, then try again.', 'warning');
                 });
             };
             
-            document.getElementById('musicSelector').onchange = () => {
+            musicSelector.onchange = () => {
                 syncAudio.setAudioFile(musicSelector.value);
             };
             
@@ -501,13 +791,13 @@
             };
             
             // Setup audio element events for time display
-            audioElement.addEventListener('timeupdate', () => {
+            audioPlayer.addEventListener('timeupdate', () => {
                 if (!syncAudio.isSeeking()) {
                     updateTimeDisplay(syncAudio.getCurrentTime());
                 }
             });
             
-            audioElement.addEventListener('loadedmetadata', () => {
+            audioPlayer.addEventListener('loadedmetadata', () => {
                 updateTimeDisplay(syncAudio.getCurrentTime());
                 seekSlider.max = syncAudio.getDuration() || 100;
             });
@@ -518,9 +808,9 @@
             
             const btn = document.getElementById('playPauseBtn');
             if (syncAudio.isPlaying()) {
-                btn.textContent = 'Pause';
+                btn.innerHTML = '⏸️ Pause';
             } else {
-                btn.textContent = 'Play';
+                btn.innerHTML = '▶️ Play';
             }
         }
         
@@ -549,143 +839,160 @@
             sessionList.innerHTML = '';
             
             if (!sessions || sessions.length === 0) {
-                sessionList.innerHTML = '<li>No sessions connected yet</li>';
+                sessionList.innerHTML = '<li class="session-item">No sessions connected yet</li>';
                 sessionCount.textContent = '0';
                 return;
             }
             
             sessions.forEach(session => {
                 const li = document.createElement('li');
+                li.className = 'session-item';
+                
                 const isCurrent = session.clientId === syncAudio.getClientId();
-                const alias = session.alias || 'Unknown';
+                if (isCurrent) {
+                    li.classList.add('current');
+                }
+                
                 const roleClass = session.role === 'master' ? 'role-master' : 'role-slave';
                 const roleText = session.role === 'master' ? 'Master' : 'Slave';
                 
-                li.innerHTML = `<strong>${alias}</strong> <span class="${roleClass}">(${roleText})</span> <span class="client-id">[${session.clientId}]</span>`;
-                if (isCurrent) {
-                    li.classList.add('active');
-                }
+                li.innerHTML = `
+                    <span class="session-alias">${session.alias || 'Unknown'}</span>
+                    <span class="session-role ${roleClass}">${roleText}</span>
+                `;
+                
                 sessionList.appendChild(li);
             });
             
             sessionCount.textContent = sessions.length;
         }
         
-        // List audio devices with Bluetooth detection
-        async function listAudioDevices() {
+        // Refresh device list
+        async function refreshDeviceList() {
+            if (!syncAudio) return;
+            
             try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
-                const deviceList = document.getElementById('deviceList');
-                
-                deviceList.innerHTML = '';
-                
-                if (audioOutputs.length === 0) {
-                    deviceList.innerHTML = '<li>No audio output devices found</li>';
-                    return;
-                }
-                
-                // Sort: Bluetooth devices first, then others
-                const bluetoothDevices = [];
-                const otherDevices = [];
-                
-                audioOutputs.forEach(device => {
-                    const label = device.label || `Device ${device.deviceId.substring(0, 8)}`;
-                    const isBluetooth = label.toLowerCase().includes('bluetooth') || 
-                                       device.deviceId.toLowerCase().includes('bluetooth') ||
-                                       label.toLowerCase().includes('wireless') ||
-                                       label.toLowerCase().includes('headphones') ||
-                                       label.toLowerCase().includes('earbuds');
-                    
-                    const deviceInfo = {
-                        deviceId: device.deviceId,
-                        label: label,
-                        isBluetooth: isBluetooth
-                    };
-                    
-                    if (isBluetooth) {
-                        bluetoothDevices.push(deviceInfo);
-                    } else {
-                        otherDevices.push(deviceInfo);
-                    }
-                });
-                
-                // Add Bluetooth devices first
-                bluetoothDevices.forEach(device => {
-                    const li = document.createElement('li');
-                    li.classList.add('bluetooth');
-                    li.innerHTML = `<span class="bluetooth-icon">📡</span> ${device.label}`;
-                    li.dataset.deviceId = device.deviceId;
-                    li.addEventListener('click', () => selectDevice(device.deviceId));
-                    deviceList.appendChild(li);
-                });
-                
-                // Add other devices
-                otherDevices.forEach(device => {
-                    const li = document.createElement('li');
-                    li.textContent = device.label;
-                    li.dataset.deviceId = device.deviceId;
-                    li.addEventListener('click', () => selectDevice(device.deviceId));
-                    deviceList.appendChild(li);
-                });
-                
+                await syncAudio.listAudioDevices();
             } catch (error) {
-                console.error('Failed to enumerate devices:', error);
-                document.getElementById('deviceList').innerHTML = '<li>Error detecting devices</li>';
+                console.error('Failed to refresh devices:', error);
             }
         }
         
-        // Select audio device
+        // Render device list
+        function renderDeviceList(allDevices, bluetoothDevices) {
+            deviceList.innerHTML = '';
+            
+            if (allDevices.length === 0) {
+                deviceList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #95a5a6;">No audio devices found</p>';
+                return;
+            }
+            
+            // Render all devices
+            allDevices.forEach(device => {
+                const isBluetooth = bluetoothDevices.some(d => d.deviceId === device.deviceId);
+                const card = createDeviceCard(device, isBluetooth);
+                deviceList.appendChild(card);
+            });
+            
+            // Update current device info
+            const currentDevice = syncAudio.getCurrentAudioDevice();
+            if (currentDevice) {
+                const latency = syncAudio.getDeviceLatency(currentDevice.deviceId);
+                const isBluetooth = syncAudio.getBluetoothDevices().some(d => d.deviceId === currentDevice.deviceId);
+                updateCurrentDeviceInfo(currentDevice, latency, isBluetooth);
+            }
+        }
+        
+        // Create device card
+        function createDeviceCard(device, isBluetooth) {
+            const card = document.createElement('div');
+            card.className = `device-card ${isBluetooth ? 'bluetooth' : ''}`;
+            card.dataset.deviceId = device.deviceId;
+            
+            const latency = syncAudio.getDeviceLatency(device.deviceId);
+            const isSelected = currentDeviceId === device.deviceId;
+            
+            if (isSelected) {
+                card.classList.add('selected');
+            }
+            
+            const model = syncAudio.audioDeviceManager.getDeviceModel(device);
+            
+            card.innerHTML = `
+                <div class="device-name">
+                    ${isBluetooth ? '<span class="bluetooth-icon">📡</span>' : ''}
+                    ${device.label || model || 'Unknown Device'}
+                </div>
+                <div class="device-id">${device.deviceId}</div>
+                <div class="device-meta">
+                    <span>${isBluetooth ? 'Bluetooth' : 'Wired'}</span>
+                    <span class="device-latency">${latency} ms latency</span>
+                </div>
+            `;
+            
+            // Add click handler
+            card.onclick = () => {
+                selectDevice(device.deviceId);
+            };
+            
+            return card;
+        }
+        
+        // Select a device
         async function selectDevice(deviceId) {
             try {
-                if (audioElement.setSinkId) {
-                    await audioElement.setSinkId(deviceId);
-                    console.log(`Audio output set to: ${deviceId}`);
+                const success = await syncAudio.selectAudioDevice(deviceId);
+                if (success) {
+                    currentDeviceId = deviceId;
                     
-                    // Update UI to show active device
-                    document.querySelectorAll('#deviceList li').forEach(li => {
-                        li.classList.remove('active');
+                    // Update UI
+                    document.querySelectorAll('.device-card').forEach(card => {
+                        card.classList.remove('selected');
                     });
-                    const activeLi = document.querySelector(`#deviceList li[data-device-id="${deviceId}"]`);
-                    if (activeLi) {
-                        activeLi.classList.add('active');
+                    
+                    const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
+                    if (card) {
+                        card.classList.add('selected');
                     }
                     
-                    return true;
+                    // Update current device info
+                    const device = syncAudio.getCurrentAudioDevice();
+                    const latency = syncAudio.getDeviceLatency(deviceId);
+                    const isBluetooth = syncAudio.getBluetoothDevices().some(d => d.deviceId === deviceId);
+                    updateCurrentDeviceInfo(device, latency, isBluetooth);
                 } else {
-                    console.warn('setSinkId not supported in this browser');
-                    alert('Device selection is not supported in your browser. Try Chrome, Edge, or Opera.');
-                    return false;
+                    showNotification('Failed to select device. Make sure the audio is not playing.', 'error');
                 }
             } catch (error) {
-                console.error('Failed to set audio device:', error);
-                alert(`Failed to select device: ${error.message}`);
-                return false;
+                console.error('Failed to select device:', error);
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Update current device info display
+        function updateCurrentDeviceInfo(device, latency, isBluetooth) {
+            if (device) {
+                document.getElementById('currentDeviceName').textContent = device.label || 'Unknown';
+                document.getElementById('currentDeviceLatency').textContent = latency + ' ms';
+            } else {
+                document.getElementById('currentDeviceName').textContent = 'None';
+                document.getElementById('currentDeviceLatency').textContent = '0 ms';
             }
         }
         
         // Initialize mode buttons
         function initModeButtons() {
-            const localBtn = document.getElementById('localModeBtn');
-            const serverBtn = document.getElementById('serverModeBtn');
-            
-            localBtn.addEventListener('click', () => {
-                switchMode('broadcast');
-            });
-            
-            serverBtn.addEventListener('click', () => {
-                switchMode('websocket');
+            document.querySelectorAll('.mode-card').forEach(card => {
+                card.onclick = () => {
+                    document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+                    switchMode(card.dataset.mode);
+                };
             });
         }
         
         function switchMode(mode) {
-            // Update UI
-            document.querySelectorAll('.mode-option button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            document.getElementById(`${mode}ModeBtn`).classList.add('active');
-            
-            // Hide/show sections
+            // Hide/show server info
             document.getElementById('serverInfo').style.display = mode === 'websocket' ? 'block' : 'none';
             
             // Initialize SyncAudio
@@ -694,8 +1001,8 @@
         }
         
         // Initialize
-        document.addEventListener('DOMContentLoaded', async () => {
-            await listAudioDevices();
+        document.addEventListener('DOMContentLoaded', () => {
+            checkBrowserSupport();
             initModeButtons();
             
             // Start with broadcast mode by default
