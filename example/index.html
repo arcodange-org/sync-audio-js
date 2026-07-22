@@ -38,10 +38,81 @@
             border-radius: 5px;
         }
         #audioPlayer { margin-top: 20px; }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-align: left;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #555;
+            font-size: 18px;
+        }
+        .device-list, .session-list {
+            list-style: none;
+            padding: 0;
+        }
+        .device-list li, .session-list li {
+            padding: 8px 12px;
+            margin: 5px 0;
+            background-color: #f0f0f0;
+            border-radius: 3px;
+        }
+        .device-list li.active, .session-list li.active {
+            background-color: #d4edda;
+            font-weight: bold;
+        }
+        .alias {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 1.2em;
+        }
+        .client-id {
+            font-size: 0.8em;
+            color: #666;
+            font-family: monospace;
+        }
+        .role-master {
+            color: #155724;
+            font-weight: bold;
+        }
+        .role-slave {
+            color: #856404;
+        }
     </style>
 </head>
 <body>
     <h1>SyncAudio Demo</h1>
+    
+    <!-- Session Information -->
+    <div class="section">
+        <h2>Your Session</h2>
+        <p>Alias: <span id="sessionAlias" class="alias">Generating...</span></p>
+        <p>Client ID: <span id="clientId" class="client-id">Unknown</span></p>
+        <p>Role: <span id="role">Unknown</span></p>
+    </div>
+    
+    <!-- Connected Sessions -->
+    <div class="section">
+        <h2>Connected Sessions (<span id="sessionCount">0</span>)</h2>
+        <ul id="sessionList" class="session-list">
+            <li>No sessions connected yet</li>
+        </ul>
+    </div>
+    
+    <!-- Audio Devices -->
+    <div class="section">
+        <h2>Audio Output Devices</h2>
+        <select id="deviceSelector" style="width: 100%; padding: 8px; margin: 10px 0;">
+            <option value="">Default device</option>
+        </select>
+        <ul id="deviceList" class="device-list">
+            <li>Detecting devices...</li>
+        </ul>
+    </div>
+    
     <div id="status" class="status">Connecting...</div>
     <div class="controls">
         <button id="startBtn" disabled>Start Sync</button>
@@ -51,19 +122,127 @@
     <div class="info">
         <p>Bluetooth Latency: <span id="bluetoothLatency">Measuring...</span> ms</p>
         <p>Clock Offset: <span id="clockOffset">0</span> ms</p>
-        <p>Role: <span id="role">Unknown</span></p>
     </div>
     <audio id="audioPlayer" controls></audio>
 
-    <!-- Use the published version from unpkg CDN -->
-    <script src="https://unpkg.com/sync-audio@1.0.0/dist/index.js"></script>
+    <!-- Use the local built library -->
+    <script src="../dist/index.js"></script>
     <script>
+        // Session alias generator
+        const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy', 'Jolly', 'Brave', 'Silent', 'Noisy', 'Wise'];
+        const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime', 'Teal', 'Navy', 'Maroon', 'Olive', 'Silver'];
+        const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala', 'Zebra', 'Giraffe', 'Penguin', 'Kangaroo', 'Octopus'];
+        
+        function generateAlias() {
+            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const animal = animals[Math.floor(Math.random() * animals.length)];
+            return `${adj} ${color} ${animal}`;
+        }
+        
+        function getOrCreateAlias() {
+            let alias = localStorage.getItem('syncAudioAlias');
+            if (!alias) {
+                alias = generateAlias();
+                localStorage.setItem('syncAudioAlias', alias);
+            }
+            return alias;
+        }
+        
         const audioFile = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+        const sessionAlias = getOrCreateAlias();
+        let clientId = null;
+        let currentDeviceId = null;
+        
+        // Update session alias display
+        document.getElementById('sessionAlias').textContent = sessionAlias;
+        
+        // List audio devices
+        async function listAudioDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+                const deviceList = document.getElementById('deviceList');
+                const deviceSelector = document.getElementById('deviceSelector');
+                
+                // Clear existing items
+                deviceList.innerHTML = '';
+                deviceSelector.innerHTML = '<option value="">Default device</option>';
+                
+                if (audioOutputs.length === 0) {
+                    deviceList.innerHTML = '<li>No audio output devices found</li>';
+                    return;
+                }
+                
+                audioOutputs.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = device.label || `Device ${device.deviceId.substring(0, 8)}`;
+                    deviceSelector.appendChild(option);
+                    
+                    const li = document.createElement('li');
+                    li.textContent = device.label || `Device ${device.deviceId.substring(0, 8)}`;
+                    if (device.deviceId === currentDeviceId) {
+                        li.classList.add('active');
+                    }
+                    deviceList.appendChild(li);
+                });
+                
+                // Set up device selector change handler
+                deviceSelector.addEventListener('change', async (e) => {
+                    currentDeviceId = e.target.value;
+                    if (currentDeviceId) {
+                        try {
+                            // Try to set the sinkId if the browser supports it
+                            const audioElement = document.getElementById('audioPlayer');
+                            if (audioElement.setSinkId) {
+                                await audioElement.setSinkId(currentDeviceId);
+                                console.log(`Audio output set to: ${currentDeviceId}`);
+                            } else {
+                                console.warn('setSinkId not supported in this browser');
+                            }
+                            // Update active state in list
+                            document.querySelectorAll('.device-list li').forEach(li => {
+                                li.classList.remove('active');
+                            });
+                            const activeIndex = audioOutputs.findIndex(d => d.deviceId === currentDeviceId);
+                            if (activeIndex >= 0) {
+                                document.querySelectorAll('.device-list li')[activeIndex].classList.add('active');
+                            }
+                        } catch (error) {
+                            console.error('Failed to set audio device:', error);
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Failed to enumerate devices:', error);
+                document.getElementById('deviceList').innerHTML = '<li>Error detecting devices</li>';
+            }
+        }
+        
+        // Check for setSinkId support
+        async function checkSinkIdSupport() {
+            const audioElement = document.getElementById('audioPlayer');
+            if (!audioElement.setSinkId) {
+                console.log('setSinkId not supported - device selection may not work');
+            }
+        }
+        
+        // Initialize device listing when page loads
+        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+            listAudioDevices();
+            checkSinkIdSupport();
+        } else {
+            document.getElementById('deviceList').innerHTML = '<li>Device enumeration not supported in this browser</li>';
+        }
+        
         const audioSync = new SyncAudio({
             websocketUrl: 'ws://' + window.location.hostname + ':8080',
             audioFile: audioFile,
             autoStart: false,
-            autoMeasureLatency: true
+            autoMeasureLatency: true,
+            sessionAlias: sessionAlias
         });
 
         audioSync.on('ready', ({ isMaster, bluetoothLatency }) => {
@@ -76,12 +255,23 @@
             document.getElementById('stopBtn').disabled = false;
         });
 
+        audioSync.on('role', ({ role, clientId: cid }) => {
+            clientId = cid;
+            document.getElementById('clientId').textContent = cid || 'Unknown';
+            document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
+            document.getElementById('role').className = role === 'master' ? 'role-master' : 'role-slave';
+        });
+
         audioSync.on('bluetooth-latency', ({ latency }) => {
             document.getElementById('bluetoothLatency').textContent = latency;
         });
 
         audioSync.on('clock-sync', ({ offset }) => {
             document.getElementById('clockOffset').textContent = offset.toFixed(2);
+        });
+
+        audioSync.on('session-update', ({ sessions }) => {
+            updateSessionListFromServer(sessions);
         });
 
         audioSync.on('play', () => {
@@ -95,6 +285,39 @@
         audioSync.on('stop', () => {
             console.log('Audio stopped');
         });
+
+        // Track sessions
+        function updateSessionListFromServer(sessions) {
+            const sessionList = document.getElementById('sessionList');
+            const sessionCount = document.getElementById('sessionCount');
+            
+            // Clear and rebuild the list
+            sessionList.innerHTML = '';
+            
+            sessions.forEach(session => {
+                const li = document.createElement('li');
+                li.dataset.clientId = session.clientId;
+                const isCurrent = session.clientId === clientId;
+                const alias = session.alias || (isCurrent ? sessionAlias : 'Unknown');
+                
+                const roleClass = session.role === 'master' ? 'role-master' : 'role-slave';
+                const roleText = session.role === 'master' ? 'Master' : 'Slave';
+                
+                li.innerHTML = `<strong>${alias}</strong> <span class="${roleClass}">(${roleText})</span> <span class="client-id">[${session.clientId}]</span>`;
+                if (isCurrent) {
+                    li.classList.add('active');
+                }
+                sessionList.appendChild(li);
+            });
+            
+            // Update count
+            const count = sessions.length;
+            sessionCount.textContent = count;
+            
+            if (count === 0) {
+                sessionList.innerHTML = '<li>No sessions connected yet</li>';
+            }
+        }
 
         document.getElementById('startBtn').addEventListener('click', () => {
             audioSync.startSync();

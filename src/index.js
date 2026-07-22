@@ -10,7 +10,8 @@ const DEFAULT_CONFIG = {
   autoMeasureLatency: true,
   latencyCompensation: 0,
   clockSyncConfig: {},
-  audioPlayerConfig: {}
+  audioPlayerConfig: {},
+  sessionAlias: null
 };
 
 export class SyncAudio {
@@ -21,6 +22,7 @@ export class SyncAudio {
     this.websocket = null;
     this.isMaster = false;
     this.bluetoothLatency = 0;
+    this.clientId = null;
     this._listeners = {};
     this._init();
   }
@@ -43,19 +45,29 @@ export class SyncAudio {
         this.websocket = new WebSocket(this.config.websocketUrl);
         this.websocket.addEventListener('open', () => {
           console.log('WebSocket connected');
+          // Send alias if provided
+          if (this.config.sessionAlias) {
+            this.websocket.send(JSON.stringify({ 
+              type: 'set-alias', 
+              alias: this.config.sessionAlias 
+            }));
+          }
           resolve();
         });
         this.websocket.addEventListener('message', (event) => {
           const data = JSON.parse(event.data);
           if (data.type === 'role') {
             this.isMaster = data.role === 'master';
-            this._emit('role', { role: data.role });
+            this.clientId = data.clientId;
+            this._emit('role', { role: data.role, clientId: data.clientId });
           } else if (data.type === 'start') {
             this._emit('start');
           } else if (data.type === 'stop') {
             this._emit('stop');
           } else if (data.type === 'pause') {
             this._emit('pause');
+          } else if (data.type === 'session-update') {
+            this._emit('session-update', { sessions: data.sessions });
           }
         });
         this.websocket.addEventListener('error', (error) => {
@@ -148,6 +160,17 @@ export class SyncAudio {
   setAudioFile(audioFile) {
     this.config.audioFile = audioFile;
     this._initAudioPlayer();
+  }
+
+  setSessionAlias(alias) {
+    this.config.sessionAlias = alias;
+    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+      this.websocket.send(JSON.stringify({ type: 'set-alias', alias }));
+    }
+  }
+
+  getClientId() {
+    return this.clientId;
   }
 
   getBluetoothLatency() {
