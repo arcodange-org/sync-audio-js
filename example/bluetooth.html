@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncAudio - Bluetooth Device Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 { color: #333; }
+        h2 { color: #555; margin-top: 30px; }
+        
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        
+        .device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .device-card {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+        }
+        
+        .device-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 4px 8px rgba(0,123,255,0.2);
+        }
+        
+        .device-card.selected {
+            border-color: #28a745;
+            background-color: #f8fff9;
+        }
+        
+        .device-card.bluetooth {
+            border-left: 4px solid #0066cc;
+        }
+        
+        .device-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .device-id {
+            font-size: 0.75em;
+            color: #666;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        
+        .device-latency {
+            font-size: 0.9em;
+            color: #856404;
+            margin-top: 8px;
+        }
+        
+        .device-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: #212529; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-small { padding: 4px 8px; font-size: 12px; }
+        
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .controls {
+            margin: 30px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .info-panel {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .info-panel h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        
+        .latency-input {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        
+        .latency-input input {
+            width: 80px;
+            padding: 6px;
+        }
+        
+        .bluetooth-icon {
+            color: #0066cc;
+            margin-right: 5px;
+        }
+        
+        .feature-check {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .check-icon { color: #28a745; }
+        .cross-icon { color: #dc3545; }
+        
+        audio {
+            width: 100%;
+            margin: 20px 0;
+        }
+        
+        .track-selector {
+            margin: 15px 0;
+        }
+        
+        .track-selector select {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎧 SyncAudio - Bluetooth Device Manager</h1>
+    
+    <!-- Feature Support Check -->
+    <div class="info-panel">
+        <h3>Browser Support</h3>
+        <div class="feature-check">
+            <div class="feature-item">
+                <span id="setSinkIdStatus">⏳</span>
+                <span>setSinkId (Device Selection)</span>
+            </div>
+            <div class="feature-item">
+                <span id="enumerateDevicesStatus">⏳</span>
+                <span>enumerateDevices</span>
+            </div>
+            <div class="feature-item">
+                <span id="webBluetoothStatus">⏳</span>
+                <span>Web Bluetooth API</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Current Device Info -->
+    <div class="info-panel">
+        <h3>Current Device</h3>
+        <p>Selected: <strong id="currentDeviceName">None</strong></p>
+        <p>Device ID: <code id="currentDeviceId">None</code></p>
+        <p>Latency: <span id="currentDeviceLatency">0</span> ms</p>
+        <p>Type: <span id="currentDeviceType">None</span></p>
+    </div>
+    
+    <!-- Audio Track Selection -->
+    <div class="track-selector">
+        <select id="musicSelector">
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">SoundHelix - Song 1</option>
+            <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3">SoundHelix - Song 2</option>
+            <option value="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3">Bell Ringing (Short)</option>
+        </select>
+    </div>
+    
+    <!-- Audio Player -->
+    <audio id="audioPlayer" controls></audio>
+    
+    <!-- Device Controls -->
+    <div class="controls">
+        <button id="refreshBtn" class="btn-primary">🔄 Refresh Devices</button>
+        <button id="defaultBtn" class="btn-warning">🔙 Default Device</button>
+        <button id="testBtn" class="btn-success">▶️ Test Audio</button>
+    </div>
+    
+    <!-- Bluetooth Devices Section -->
+    <h2>📡 Bluetooth Audio Devices</h2>
+    <div id="bluetoothDevices" class="device-grid">
+        <p style="grid-column: 1 / -1; text-align: center; color: #666;">
+            Loading devices...
+        </p>
+    </div>
+    
+    <!-- Other Devices Section -->
+    <h2>🔊 Other Audio Devices</h2>
+    <div id="otherDevices" class="device-grid">
+        <p style="grid-column: 1 / -1; text-align: center; color: #666;">
+            Loading devices...
+        </p>
+    </div>
+    
+    <!-- Custom Latency Section -->
+    <div class="info-panel">
+        <h3>⚙️ Custom Latency Settings</h3>
+        <p>Override the detected latency for specific devices:</p>
+        <div id="latencySettings"></div>
+    </div>
+
+    <script src="https://arcodange-org.github.io/sync-audio-js/dist/index.js"></script>
+    <script>
+        // Global state
+        let syncAudio = null;
+        let currentDeviceId = null;
+        
+        // DOM Elements
+        const audioPlayer = document.getElementById('audioPlayer');
+        const musicSelector = document.getElementById('musicSelector');
+        const bluetoothDevicesContainer = document.getElementById('bluetoothDevices');
+        const otherDevicesContainer = document.getElementById('otherDevices');
+        const latencySettingsContainer = document.getElementById('latencySettings');
+        
+        // Check browser support
+        function checkBrowserSupport() {
+            const setSinkIdSupported = SyncAudio.isSetSinkIdSupported();
+            const enumerateSupported = 'mediaDevices' in navigator;
+            const webBluetoothSupported = SyncAudio.isWebBluetoothSupported();
+            
+            document.getElementById('setSinkIdStatus').textContent = setSinkIdSupported ? '✓' : '✗';
+            document.getElementById('setSinkIdStatus').className = setSinkIdSupported ? 'check-icon' : 'cross-icon';
+            
+            document.getElementById('enumerateDevicesStatus').textContent = enumerateSupported ? '✓' : '✗';
+            document.getElementById('enumerateDevicesStatus').className = enumerateSupported ? 'check-icon' : 'cross-icon';
+            
+            document.getElementById('webBluetoothStatus').textContent = webBluetoothSupported ? '✓' : '✗';
+            document.getElementById('webBluetoothStatus').className = webBluetoothSupported ? 'check-icon' : 'cross-icon';
+            
+            if (!setSinkIdSupported) {
+                showWarning('Device selection (setSinkId) is not supported in your browser. Try Chrome, Edge, or Opera.');
+            }
+        }
+        
+        function showWarning(message) {
+            const warning = document.createElement('div');
+            warning.className = 'status warning';
+            warning.textContent = message;
+            warning.style.margin = '10px 0';
+            document.body.insertBefore(warning, document.querySelector('h1').nextSibling);
+        }
+        
+        // Initialize SyncAudio
+        async function init() {
+            checkBrowserSupport();
+            
+            // Create SyncAudio instance in broadcast mode
+            syncAudio = new SyncAudio({
+                mode: 'broadcast',
+                broadcastChannel: 'sync-audio-bluetooth-demo',
+                audioFile: musicSelector.value,
+                autoMeasureLatency: false, // We'll handle latency manually
+                manageAudioDevices: true
+            });
+            
+            // Setup event listeners
+            syncAudio.on('ready', ({ audioDevices }) => {
+                console.log('SyncAudio ready');
+                refreshDevices();
+            });
+            
+            syncAudio.on('audio-devices-updated', ({ devices, bluetoothDevices }) => {
+                console.log('Devices updated:', devices.length, 'Bluetooth:', bluetoothDevices.length);
+                renderDevices(devices, bluetoothDevices);
+            });
+            
+            syncAudio.on('audio-device-selected', ({ deviceId, device, latency, isBluetooth }) => {
+                currentDeviceId = deviceId;
+                updateCurrentDeviceInfo(device, latency, isBluetooth);
+                renderLatencySettings();
+            });
+            
+            syncAudio.on('device-latency-updated', ({ deviceId, latency }) => {
+                renderLatencySettings();
+            });
+            
+            // Setup controls
+            document.getElementById('refreshBtn').onclick = refreshDevices;
+            document.getElementById('defaultBtn').onclick = () => {
+                syncAudio.switchAudioDevice(null);
+            };
+            
+            document.getElementById('testBtn').onclick = () => {
+                audioPlayer.src = musicSelector.value;
+                audioPlayer.play().catch(e => {
+                    console.error('Autoplay blocked:', e);
+                    alert('Please interact with the page first, then try again.');
+                });
+            };
+            
+            musicSelector.onchange = () => {
+                syncAudio.setAudioFile(musicSelector.value);
+            };
+            
+            // Initial refresh
+            await refreshDevices();
+        }
+        
+        // Refresh device list
+        async function refreshDevices() {
+            if (!syncAudio) return;
+            
+            try {
+                await syncAudio.listAudioDevices();
+            } catch (error) {
+                console.error('Failed to refresh devices:', error);
+            }
+        }
+        
+        // Render devices
+        function renderDevices(allDevices, bluetoothDevices) {
+            // Clear containers
+            bluetoothDevicesContainer.innerHTML = '';
+            otherDevicesContainer.innerHTML = '';
+            
+            if (allDevices.length === 0) {
+                bluetoothDevicesContainer.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #666;">No devices found</p>';
+                otherDevicesContainer.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #666;">No devices found</p>';
+                return;
+            }
+            
+            // Render Bluetooth devices
+            if (bluetoothDevices.length > 0) {
+                bluetoothDevices.forEach(device => {
+                    const card = createDeviceCard(device, true);
+                    bluetoothDevicesContainer.appendChild(card);
+                });
+            } else {
+                bluetoothDevicesContainer.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #666;">No Bluetooth devices found</p>';
+            }
+            
+            // Render other devices
+            const otherDevices = allDevices.filter(d => !bluetoothDevices.some(bd => bd.deviceId === d.deviceId));
+            if (otherDevices.length > 0) {
+                otherDevices.forEach(device => {
+                    const card = createDeviceCard(device, false);
+                    otherDevicesContainer.appendChild(card);
+                });
+            } else {
+                otherDevicesContainer.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #666;">No other devices found</p>';
+            }
+            
+            // Update current device info
+            const currentDevice = syncAudio.getCurrentAudioDevice();
+            if (currentDevice) {
+                const latency = syncAudio.getDeviceLatency(currentDevice.deviceId);
+                const isBluetooth = syncAudio.getBluetoothDevices().some(d => d.deviceId === currentDevice.deviceId);
+                updateCurrentDeviceInfo(currentDevice, latency, isBluetooth);
+            }
+        }
+        
+        // Create device card
+        function createDeviceCard(device, isBluetooth) {
+            const card = document.createElement('div');
+            card.className = `device-card ${isBluetooth ? 'bluetooth' : ''}`;
+            card.dataset.deviceId = device.deviceId;
+            
+            const latency = syncAudio.getDeviceLatency(device.deviceId);
+            const isSelected = currentDeviceId === device.deviceId;
+            
+            if (isSelected) {
+                card.classList.add('selected');
+            }
+            
+            const model = syncAudio.audioDeviceManager.getDeviceModel(device);
+            
+            card.innerHTML = `
+                <div class="device-name">
+                    ${isBluetooth ? '<span class="bluetooth-icon">📡</span>' : ''}
+                    ${device.label || model || 'Unknown Device'}
+                </div>
+                <div class="device-id">${device.deviceId}</div>
+                <div class="device-latency">
+                    Latency: <strong>${latency} ms</strong>
+                </div>
+                <div class="device-actions">
+                    <button class="btn-success btn-small select-btn" data-device-id="${device.deviceId}">
+                        ${isSelected ? '✓ Selected' : 'Select'}
+                    </button>
+                </div>
+            `;
+            
+            // Add click handler for select button
+            const selectBtn = card.querySelector('.select-btn');
+            selectBtn.onclick = (e) => {
+                e.stopPropagation();
+                selectDevice(device.deviceId);
+            };
+            
+            // Also make card clickable
+            card.onclick = () => {
+                selectDevice(device.deviceId);
+            };
+            
+            return card;
+        }
+        
+        // Select a device
+        async function selectDevice(deviceId) {
+            try {
+                const success = await syncAudio.selectAudioDevice(deviceId);
+                if (success) {
+                    currentDeviceId = deviceId;
+                    
+                    // Update UI
+                    document.querySelectorAll('.device-card').forEach(card => {
+                        card.classList.remove('selected');
+                        const btn = card.querySelector('.select-btn');
+                        if (btn) btn.textContent = 'Select';
+                    });
+                    
+                    const card = document.querySelector(`.device-card[data-device-id="${deviceId}"]`);
+                    if (card) {
+                        card.classList.add('selected');
+                        const btn = card.querySelector('.select-btn');
+                        if (btn) btn.textContent = '✓ Selected';
+                    }
+                    
+                    // Update current device info
+                    const device = syncAudio.getCurrentAudioDevice();
+                    const latency = syncAudio.getDeviceLatency(deviceId);
+                    const isBluetooth = syncAudio.getBluetoothDevices().some(d => d.deviceId === deviceId);
+                    updateCurrentDeviceInfo(device, latency, isBluetooth);
+                    
+                    renderLatencySettings();
+                } else {
+                    alert('Failed to select device. Make sure the audio is not playing.');
+                }
+            } catch (error) {
+                console.error('Failed to select device:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Update current device info display
+        function updateCurrentDeviceInfo(device, latency, isBluetooth) {
+            if (device) {
+                document.getElementById('currentDeviceName').textContent = device.label || 'Unknown';
+                document.getElementById('currentDeviceId').textContent = device.deviceId;
+                document.getElementById('currentDeviceLatency').textContent = latency;
+                document.getElementById('currentDeviceType').textContent = isBluetooth ? 'Bluetooth' : 'Wired';
+            } else {
+                document.getElementById('currentDeviceName').textContent = 'None';
+                document.getElementById('currentDeviceId').textContent = 'None';
+                document.getElementById('currentDeviceLatency').textContent = '0';
+                document.getElementById('currentDeviceType').textContent = 'None';
+            }
+        }
+        
+        // Render latency settings
+        function renderLatencySettings() {
+            if (!syncAudio || !syncAudio.audioDeviceManager) {
+                latencySettingsContainer.innerHTML = '<p>Audio device manager not available</p>';
+                return;
+            }
+            
+            const devices = syncAudio.audioDeviceManager.devices;
+            
+            if (devices.length === 0) {
+                latencySettingsContainer.innerHTML = '<p>No devices available</p>';
+                return;
+            }
+            
+            const fragment = document.createDocumentFragment();
+            
+            devices.forEach(device => {
+                const deviceId = device.deviceId;
+                const currentLatency = syncAudio.getDeviceLatency(deviceId);
+                const isBluetooth = syncAudio.getBluetoothDevices().some(d => d.deviceId === deviceId);
+                
+                const setting = document.createElement('div');
+                setting.style.margin = '10px 0';
+                setting.style.padding = '10px';
+                setting.style.backgroundColor = '#fff';
+                setting.style.borderRadius = '4px';
+                setting.style.border = '1px solid #eee';
+                
+                const label = document.createElement('label');
+                label.style.display = 'block';
+                label.style.marginBottom = '5px';
+                label.style.fontWeight = 'bold';
+                label.textContent = `${isBluetooth ? '📡 ' : ''}${device.label || deviceId.substring(0, 20)}`;
+                
+                const inputGroup = document.createElement('div');
+                inputGroup.className = 'latency-input';
+                
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.value = currentLatency;
+                input.min = '0';
+                input.max = '500';
+                input.style.width = '80px';
+                
+                const btn = document.createElement('button');
+                btn.className = 'btn-primary btn-small';
+                btn.textContent = 'Save';
+                btn.onclick = () => {
+                    const latency = parseInt(input.value) || 0;
+                    syncAudio.audioDeviceManager.setDeviceLatency(deviceId, latency);
+                };
+                
+                inputGroup.appendChild(input);
+                inputGroup.appendChild(btn);
+                
+                setting.appendChild(label);
+                setting.appendChild(inputGroup);
+                
+                fragment.appendChild(setting);
+            });
+            
+            latencySettingsContainer.innerHTML = '';
+            latencySettingsContainer.appendChild(fragment);
+        }
+        
+        // Initialize on DOM load
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

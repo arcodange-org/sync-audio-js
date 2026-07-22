@@ -1,6 +1,7 @@
 import { AudioPlayer } from './AudioPlayer.js';
 import { ClockSync } from './ClockSync.js';
 import { getBluetoothLatency, preMeasureBluetoothLatency } from './BluetoothLatency.js';
+import { AudioDeviceManager } from './AudioDeviceManager.js';
 import { getLatencyFromDB, updateLatencyDB } from './database.js';
 
 const DEFAULT_CONFIG = {
@@ -16,7 +17,9 @@ const DEFAULT_CONFIG = {
   audioPlayerConfig: {},
   sessionAlias: null,
   // For local mode, auto-elect first as master
-  autoMaster: true
+  autoMaster: true,
+  // Enable audio device management
+  manageAudioDevices: true
 };
 
 // Simple in-memory clock sync for broadcast mode
@@ -48,6 +51,7 @@ export class SyncAudio {
   constructor(options = {}) {
     this.config = { ...DEFAULT_CONFIG, ...options };
     this.audioPlayer = null;
+    this.audioDeviceManager = null;
     this.clockSync = null;
     this.websocket = null;
     this.broadcastChannel = null;
@@ -64,6 +68,13 @@ export class SyncAudio {
   async _init() {
     // Generate client ID
     this.clientId = this._generateClientId();
+    
+    // Initialize audio device manager if enabled
+    if (this.config.manageAudioDevices) {
+      this.audioDeviceManager = new AudioDeviceManager();
+      this._setupDeviceManagerEvents();
+      await this.audioDeviceManager.listDevices();
+    }
     
     // Initialize based on mode
     if (this.config.mode === 'broadcast') {
@@ -86,12 +97,39 @@ export class SyncAudio {
       isMaster: this.isMaster, 
       bluetoothLatency: this.bluetoothLatency,
       mode: this.config.mode,
-      clientId: this.clientId
+      clientId: this.clientId,
+      audioDevices: this.audioDeviceManager ? this.audioDeviceManager.getBluetoothDevices() : []
     });
   }
 
   _generateClientId() {
     return 'client-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+  }
+
+  _setupDeviceManagerEvents() {
+    if (!this.audioDeviceManager) return;
+    
+    this.audioDeviceManager.on('devices-updated', ({ devices, bluetoothDevices }) => {
+      this._emit('audio-devices-updated', { devices, bluetoothDevices });
+    });
+    
+    this.audioDeviceManager.on('device-selected', ({ deviceId, device, latency, isBluetooth }) => {
+      this._emit('audio-device-selected', { deviceId, device, latency, isBluetooth });
+      
+      // Update Bluetooth latency if Bluetooth device selected
+      if (isBluetooth) {
+        this.bluetoothLatency = latency;
+        this._emit('bluetooth-latency', { latency });
+      }
+    });
+    
+    this.audioDeviceManager.on('latency-updated', ({ deviceId, latency }) => {
+      this._emit('device-latency-updated', { deviceId, latency });
+    });
+    
+    this.audioDeviceManager.on('error', ({ error }) => {
+      this._emit('device-error', { error });
+    });
   }
 
   async _initBroadcastMode() {
@@ -160,7 +198,6 @@ export class SyncAudio {
   _handleBroadcastMessage(data) {
     switch (data.type) {
       case 'join':
-        // If someone joins and we're not master, they become master
         if (!this.isMaster && this.config.autoMaster) {
           this.isMaster = true;
           this._emit('role', { role: 'master', clientId: this.clientId });
@@ -342,6 +379,11 @@ export class SyncAudio {
   _initAudioPlayer() {
     this.audioPlayer = new AudioPlayer(this.config.audioFile, this.config.audioPlayerConfig);
     
+    // Set audio element for device manager
+    if (this.audioDeviceManager && this.audioPlayer.getAudioElement) {
+      this.audioDeviceManager.setAudioElement(this.audioPlayer.getAudioElement());
+    }
+    
     this.audioPlayer.addEventListener('play', () => {
       this._isPlaying = true;
       this._emit('play');
@@ -383,7 +425,12 @@ export class SyncAudio {
 
   async _measureBluetoothLatency() {
     try {
-      this.bluetoothLatency = await getBluetoothLatency();
+      // If device manager is available, use current device latency
+      if (this.audioDeviceManager && this.audioDeviceManager.getCurrentDeviceId()) {
+        this.bluetoothLatency = this.audioDeviceManager.getCurrentDeviceLatency();
+      } else {
+        this.bluetoothLatency = await getBluetoothLatency();
+      }
       this._emit('bluetooth-latency', { latency: this.bluetoothLatency });
     } catch (error) {
       console.warn('Failed to measure Bluetooth latency:', error);
@@ -593,6 +640,96 @@ export class SyncAudio {
     }
   }
 
+  // ============================================
+  // Audio Device Management
+  // ============================================
+
+  /**
+   * List available audio output devices
+   * @returns {Promise<Array>} List of audio devices
+   */
+  async listAudioDevices() {
+    if (!this.audioDeviceManager) {
+      console.warn('Audio device management not enabled');
+      return [];
+    }
+    return this.audioDeviceManager.listDevices();
+  }
+
+  /**
+   * Select an audio output device
+   * @param {string} deviceId - Device ID to select
+   * @returns {Promise<boolean>} Success or failure
+   */
+  async selectAudioDevice(deviceId) {
+    if (!this.audioDeviceManager) {
+      console.warn('Audio device management not enabled');
+      return false;
+    }
+    return this.audioDeviceManager.selectDevice(deviceId);
+  }
+
+  /**
+   * Get currently selected audio device
+   * @returns {MediaDeviceInfo|null}
+   */
+  getCurrentAudioDevice() {
+    if (!this.audioDeviceManager) return null;
+    return this.audioDeviceManager.getCurrentDevice();
+  }
+
+  /**
+   * Get Bluetooth devices
+   * @returns {Array<MediaDeviceInfo>}
+   */
+  getBluetoothDevices() {
+    if (!this.audioDeviceManager) return [];
+    return this.audioDeviceManager.getBluetoothDevices();
+  }
+
+  /**
+   * Switch to a different audio device during playback
+   * @param {string} deviceId - Device ID to switch to
+   * @returns {Promise<boolean>}
+   */
+  async switchAudioDevice(deviceId) {
+    if (!this.audioDeviceManager) {
+      console.warn('Audio device management not enabled');
+      return false;
+    }
+    return this.audioDeviceManager.switchDevice(deviceId);
+  }
+
+  /**
+   * Get device latency
+   * @param {string} deviceId
+   * @returns {number} Latency in ms
+   */
+  getDeviceLatency(deviceId) {
+    if (!this.audioDeviceManager) return 0;
+    return this.audioDeviceManager.getDeviceLatency(deviceId);
+  }
+
+  /**
+   * Check if Web Bluetooth API is supported
+   * @returns {boolean}
+   */
+  static isWebBluetoothSupported() {
+    return AudioDeviceManager.isWebBluetoothSupported();
+  }
+
+  /**
+   * Check if setSinkId is supported
+   * @returns {boolean}
+   */
+  static isSetSinkIdSupported() {
+    return AudioDeviceManager.isSupported();
+  }
+
+  // ============================================
+  // Getters for state
+  // ============================================
+
   /**
    * Get current playback time
    * @returns {number} Current time in seconds
@@ -681,10 +818,11 @@ export class SyncAudio {
     if (this.clockSync) this.clockSync.destroy();
     if (this.websocket) this.websocket.close();
     if (this.broadcastChannel) this.broadcastChannel.close();
+    if (this.audioDeviceManager) this.audioDeviceManager.destroy();
     this._listeners = {};
   }
 }
 
-export { AudioPlayer, ClockSync, getBluetoothLatency, preMeasureBluetoothLatency, getLatencyFromDB, updateLatencyDB };
+export { AudioPlayer, ClockSync, getBluetoothLatency, preMeasureBluetoothLatency, getLatencyFromDB, updateLatencyDB, AudioDeviceManager };
 
 export default SyncAudio;
