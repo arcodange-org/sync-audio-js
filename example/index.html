@@ -94,6 +94,10 @@
             font-style: italic;
             font-size: 0.9em;
         }
+        .success {
+            color: #155724;
+            font-size: 0.9em;
+        }
         .bluetooth-section {
             border-color: #0066cc;
             background-color: #f8f9ff;
@@ -123,6 +127,7 @@
     <div class="section bluetooth-section">
         <h2>📡 Bluetooth Audio Devices</h2>
         <p class="warning" id="bluetoothWarning">Bluetooth device detection requires permission. Click below to request access.</p>
+        <p class="success" id="bluetoothSuccess" style="display: none;">Bluetooth access granted! Select a device below.</p>
         <button id="requestBluetoothBtn" style="margin: 10px 0;">Request Bluetooth Access</button>
         <select id="bluetoothDeviceSelector" style="width: 100%; padding: 8px; margin: 10px 0; display: none;">
             <option value="">Select a Bluetooth device</option>
@@ -221,7 +226,10 @@
                     
                     // Check if this might be a Bluetooth device (based on label)
                     const isBluetooth = label.toLowerCase().includes('bluetooth') || 
-                                       device.deviceId.toLowerCase().includes('bluetooth');
+                                       device.deviceId.toLowerCase().includes('bluetooth') ||
+                                       device.label.toLowerCase().includes('wireless') ||
+                                       device.label.toLowerCase().includes('headphones') ||
+                                       device.label.toLowerCase().includes('earbuds');
                     
                     if (isBluetooth) {
                         li.innerHTML = `<span class="bluetooth-icon">📡</span> ${label}`;
@@ -249,12 +257,12 @@
                                 console.warn('setSinkId not supported in this browser');
                             }
                             // Update active state in list
-                            document.querySelectorAll('.device-list li').forEach(li => {
+                            document.querySelectorAll('#deviceList li').forEach(li => {
                                 li.classList.remove('active');
                             });
                             const activeIndex = audioOutputs.findIndex(d => d.deviceId === currentDeviceId);
                             if (activeIndex >= 0) {
-                                document.querySelectorAll('.device-list li')[activeIndex].classList.add('active');
+                                document.querySelectorAll('#deviceList li')[activeIndex].classList.add('active');
                             }
                         } catch (error) {
                             console.error('Failed to set audio device:', error);
@@ -272,6 +280,7 @@
         async function requestBluetoothAccess() {
             const btn = document.getElementById('requestBluetoothBtn');
             const warning = document.getElementById('bluetoothWarning');
+            const success = document.getElementById('bluetoothSuccess');
             const bluetoothSelector = document.getElementById('bluetoothDeviceSelector');
             const bluetoothList = document.getElementById('bluetoothDeviceList');
             
@@ -285,34 +294,37 @@
                 btn.disabled = true;
                 btn.textContent = 'Requesting...';
                 
-                // Request Bluetooth device
+                // Request Bluetooth device with valid service UUIDs
+                // For audio devices, we use the Generic Audio service or skip service filter
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
-                    optionalServices: ['a2dp_sink', 'audio_sink']
+                    // Optional services - using standard Bluetooth service UUIDs
+                    // For audio, we can omit this or use generic UUIDs
+                    optionalServices: []
                 });
                 
                 console.log('Bluetooth device selected:', device);
                 
-                // For now, we can only get one device at a time with requestDevice
-                // So we'll add it to our list
+                // Store the device
                 bluetoothDevices = [device];
                 
                 // Update UI
                 warning.style.display = 'none';
+                success.style.display = 'block';
                 btn.style.display = 'none';
                 bluetoothSelector.style.display = 'block';
                 
                 // Add to selector
                 const option = document.createElement('option');
                 option.value = device.id || device.deviceId;
-                option.textContent = device.name || `Bluetooth Device ${device.id.substring(0, 8)}`;
+                option.textContent = device.name || `Bluetooth Device ${(device.id || device.deviceId).substring(0, 8)}`;
                 bluetoothSelector.appendChild(option);
                 
                 // Add to list
                 bluetoothList.innerHTML = '';
                 const li = document.createElement('li');
                 li.classList.add('bluetooth');
-                li.innerHTML = `<span class="bluetooth-icon">📡</span> ${device.name || device.id} <span class="client-id">[${device.id.substring(0, 8)}]</span>`;
+                li.innerHTML = `<span class="bluetooth-icon">📡</span> ${device.name || device.id} <span class="client-id">[${(device.id || device.deviceId).substring(0, 8)}]</span>`;
                 bluetoothList.appendChild(li);
                 
                 // Set up selector change
@@ -356,7 +368,7 @@
             // Check Bluetooth availability
             if (!isBluetoothAvailable()) {
                 document.getElementById('requestBluetoothBtn').style.display = 'none';
-                document.getElementById('bluetoothWarning').textContent = 'Bluetooth API not available in this browser.';
+                document.getElementById('bluetoothWarning').textContent = 'Bluetooth API not available in this browser. Try Chrome or Edge.';
             } else {
                 document.getElementById('requestBluetoothBtn').addEventListener('click', requestBluetoothAccess);
             }
