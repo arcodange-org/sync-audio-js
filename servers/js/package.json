@@ -1,0 +1,16 @@
+{
+  "name": "sync-audio-server-js",
+  "version": "1.0.0",
+  "description": "SyncAudio WebSocket server - Node.js implementation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:prod": "node server.js 8080"
+  },
+  "keywords": ["audio", "synchronization", "websocket", "multi-device"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}
