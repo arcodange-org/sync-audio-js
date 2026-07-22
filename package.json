@@ -25,9 +25,18 @@
     "demo:video": "node scripts/generate-demo-video.js",
     "demo:gif": "node scripts/record-gif.js",
     "demo:screenshots": "node scripts/capture-screenshots.js",
-    "demo:check": "node scripts/check-pages.js"
+    "demo:check": "node scripts/check-pages.js",
+    "test:example": "npx playwright test tests/example.spec.js",
+    "test:example:headed": "npx playwright test tests/example.spec.js --headed",
+    "test:server": "python tests/test_server.py"
   },
-  "keywords": ["audio", "synchronization", "bluetooth", "latency", "multi-device"],
+  "keywords": [
+    "audio",
+    "synchronization",
+    "bluetooth",
+    "latency",
+    "multi-device"
+  ],
   "author": "Gabriel Radureau",
   "license": "MIT",
   "devDependencies": {
@@ -42,7 +51,10 @@
     "serve": "^14.2.1",
     "typescript": "^5.0.0"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/arcodange-org/sync-audio-js.git"
