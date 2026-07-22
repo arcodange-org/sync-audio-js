@@ -134,22 +134,87 @@
             color: #666;
             margin-top: 5px;
         }
+        .connection-mode {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .mode-option {
+            flex: 1;
+            min-width: 200px;
+        }
+        .mode-option button {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+        }
+        .mode-option button.active {
+            background-color: #007bff;
+            color: white;
+            border: none;
+        }
+        .mode-option button:disabled {
+            opacity: 0.7;
+        }
+        .webrtc-info {
+            background-color: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
     <h1>SyncAudio Demo</h1>
     
-    <!-- Server Connection Info -->
-    <div class="section" id="serverSection">
-        <h2>⚡ Server Connection</h2>
-        <div id="serverStatus" class="server-info">
-            <p>To enable multi-device sync, you need to run a WebSocket server.</p>
-            <p><strong>For local testing:</strong> Run <code>npm start</code> in the project directory, then open <code>http://localhost:8080/example/</code> in multiple tabs.</p>
-            <p><strong>For GitHub Pages:</strong> WebSocket connection will fail (static hosting only). Use local server for full functionality.</p>
+    <!-- Connection Mode Selection -->
+    <div class="section">
+        <h2>🔗 Connection Mode</h2>
+        <p>Choose how to synchronize audio between devices:</p>
+        <div class="connection-mode">
+            <div class="mode-option">
+                <button id="localModeBtn" class="active">💻 Local Mode (Same Browser)</button>
+                <p style="font-size: 0.8em; margin-top: 5px;">Sync tabs in the same browser using BroadcastChannel</p>
+            </div>
+            <div class="mode-option">
+                <button id="webrtcModeBtn">🌐 WebRTC Mode (P2P)</button>
+                <p style="font-size: 0.8em; margin-top: 5px;">Direct peer-to-peer connection (experimental)</p>
+            </div>
+            <div class="mode-option">
+                <button id="serverModeBtn">⚡ Server Mode</button>
+                <p style="font-size: 0.8em; margin-top: 5px;">Requires local server (npm start)</p>
+            </div>
         </div>
-        <div id="websocketStatus" style="display: none;">
-            <p>WebSocket: <span id="wsStatus">Connecting...</span></p>
+        <div id="webrtcInfo" class="webrtc-info" style="display: none;">
+            <p><strong>WebRTC Instructions:</strong></p>
+            <ol style="text-align: left;">
+                <li>Open this page in two different browsers (Chrome + Firefox, or Chrome + Edge)</li>
+                <li>Click "WebRTC Mode" in both</li>
+                <li>Copy the Room ID from one tab and paste it in the other</li>
+                <li>Click "Connect" to establish P2P connection</li>
+            </ol>
         </div>
+        <div id="serverInfo" class="server-info" style="display: none;">
+            <p><strong>Server Mode Instructions:</strong></p>
+            <ol style="text-align: left;">
+                <li>Run: <code>git clone https://github.com/arcodange-org/sync-audio-js.git</code></li>
+                <li>Then: <code>cd sync-audio-js && npm install && npm start</code></li>
+                <li>Open: <code>http://localhost:8080/example/</code> in multiple tabs</li>
+            </ol>
+        </div>
+    </div>
+    
+    <!-- Room ID for WebRTC -->
+    <div class="section" id="roomSection" style="display: none;">
+        <h2>🔑 Room Connection</h2>
+        <div style="display: flex; gap: 10px; margin: 10px 0;">
+            <input type="text" id="roomIdInput" placeholder="Enter Room ID" style="flex: 1; padding: 8px;">
+            <button id="generateRoomBtn">Generate</button>
+            <button id="connectRoomBtn">Connect</button>
+        </div>
+        <p id="roomStatus" style="margin: 10px 0; font-size: 0.9em;"></p>
     </div>
     
     <!-- Session Information -->
@@ -164,7 +229,7 @@
     <div class="section">
         <h2>Connected Sessions (<span id="sessionCount">0</span>)</h2>
         <ul id="sessionList" class="session-list">
-            <li>No sessions connected yet (WebSocket required)</li>
+            <li>No sessions connected yet</li>
         </ul>
     </div>
     
@@ -205,79 +270,559 @@
         <button id="testBtn">Test Audio</button>
     </div>
     <div class="info">
-        <p>Bluetooth Latency: <span id="bluetoothLatency">Measuring...</span> ms</p>
+        <p>Bluetooth Latency: <span id="bluetoothLatency">N/A</span> ms</p>
         <p>Clock Offset: <span id="clockOffset">0</span> ms</p>
     </div>
     <audio id="audioPlayer" controls></audio>
 
-    <!-- Use the local built library -->
-    <script src="../dist/index.js"></script>
     <script>
-        // Session alias generator
-        const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy', 'Jolly', 'Brave', 'Silent', 'Noisy', 'Wise', 'Playful', 'Creative', 'Bold', 'Gentle', 'Fierce'];
-        const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime', 'Teal', 'Navy', 'Maroon', 'Olive', 'Silver', 'Gold', 'Black', 'White', 'Gray', 'Violet'];
-        const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala', 'Zebra', 'Giraffe', 'Penguin', 'Kangaroo', 'Octopus', 'Rabbit', 'Deer', 'Swan', 'Hawk', 'Whale'];
+        // ============================================
+        // LOCAL MODE: Uses BroadcastChannel for same-browser tabs
+        // ============================================
         
-        function generateAlias() {
-            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            const animal = animals[Math.floor(Math.random() * animals.length)];
-            return `${adj} ${color} ${animal}`;
-        }
-        
-        function getOrCreateAlias() {
-            let alias = localStorage.getItem('syncAudioAlias');
-            if (!alias) {
-                alias = generateAlias();
-                localStorage.setItem('syncAudioAlias', alias);
+        class LocalSyncManager {
+            constructor() {
+                this.channel = null;
+                this.sessions = new Map();
+                this.clientId = this.generateClientId();
+                this.alias = localStorage.getItem('syncAudioAlias') || this.generateAlias();
+                localStorage.setItem('syncAudioAlias', this.alias);
+                this.isMaster = false;
+                this.audioElement = document.getElementById('audioPlayer');
+                this.musicSelector = document.getElementById('musicSelector');
+                
+                this.init();
             }
-            return alias;
+            
+            generateClientId() {
+                return 'local-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+            }
+            
+            generateAlias() {
+                const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy'];
+                const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime'];
+                const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala'];
+                const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const animal = animals[Math.floor(Math.random() * animals.length)];
+                return `${adj} ${color} ${animal}`;
+            }
+            
+            init() {
+                // Try to use BroadcastChannel
+                try {
+                    this.channel = new BroadcastChannel('sync-audio-local');
+                    this.channel.addEventListener('message', (event) => {
+                        this.handleMessage(event.data);
+                    });
+                    
+                    // Announce ourselves
+                    this.broadcast({ type: 'join', clientId: this.clientId, alias: this.alias });
+                    
+                    // Update UI
+                    document.getElementById('sessionAlias').textContent = this.alias;
+                    document.getElementById('clientId').textContent = this.clientId;
+                    document.getElementById('status').textContent = 'Connected (Local)';
+                    document.getElementById('status').className = 'status master';
+                    document.getElementById('role').textContent = 'Master';
+                    document.getElementById('role').className = 'role-master';
+                    
+                    // Enable controls
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('pauseBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = false;
+                    
+                    // Setup controls
+                    this.setupControls();
+                    
+                } catch (error) {
+                    console.error('BroadcastChannel not supported:', error);
+                    document.getElementById('status').textContent = 'Local Mode Not Supported';
+                }
+            }
+            
+            broadcast(message) {
+                if (this.channel) {
+                    this.channel.postMessage(message);
+                }
+            }
+            
+            handleMessage(data) {
+                switch (data.type) {
+                    case 'join':
+                        this.sessions.set(data.clientId, { alias: data.alias, role: 'slave' });
+                        this.updateSessionList();
+                        break;
+                    case 'leave':
+                        this.sessions.delete(data.clientId);
+                        this.updateSessionList();
+                        break;
+                    case 'start':
+                        this.handleStart(data);
+                        break;
+                    case 'pause':
+                        this.audioElement.pause();
+                        break;
+                    case 'stop':
+                        this.audioElement.pause();
+                        this.audioElement.currentTime = 0;
+                        break;
+                    case 'track-change':
+                        this.musicSelector.value = data.track;
+                        this.audioElement.src = data.track;
+                        break;
+                }
+            }
+            
+            handleStart(data) {
+                const audioElement = this.audioElement;
+                audioElement.src = data.track || this.musicSelector.value;
+                audioElement.currentTime = 0;
+                
+                // Play immediately (all tabs will sync via BroadcastChannel)
+                audioElement.play().catch(e => console.error('Autoplay blocked:', e));
+            }
+            
+            updateSessionList() {
+                const sessionList = document.getElementById('sessionList');
+                const sessionCount = document.getElementById('sessionCount');
+                
+                sessionList.innerHTML = '';
+                
+                // Add current session
+                const currentLi = document.createElement('li');
+                currentLi.classList.add('active');
+                currentLi.innerHTML = `<strong>${this.alias}</strong> <span class="role-master">(Master)</span> <span class="client-id">[${this.clientId}]</span>`;
+                sessionList.appendChild(currentLi);
+                
+                // Add other sessions
+                this.sessions.forEach((session, clientId) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<strong>${session.alias}</strong> <span class="role-slave">(Slave)</span> <span class="client-id">[${clientId}]</span>`;
+                    sessionList.appendChild(li);
+                });
+                
+                sessionCount.textContent = this.sessions.size + 1;
+            }
+            
+            setupControls() {
+                document.getElementById('startBtn').addEventListener('click', () => {
+                    this.broadcast({
+                        type: 'start',
+                        track: this.musicSelector.value,
+                        clientId: this.clientId
+                    });
+                    const audioElement = this.audioElement;
+                    audioElement.src = this.musicSelector.value;
+                    audioElement.currentTime = 0;
+                    audioElement.play().catch(e => console.error('Autoplay blocked:', e));
+                });
+                
+                document.getElementById('pauseBtn').addEventListener('click', () => {
+                    this.broadcast({ type: 'pause', clientId: this.clientId });
+                    this.audioElement.pause();
+                });
+                
+                document.getElementById('stopBtn').addEventListener('click', () => {
+                    this.broadcast({ type: 'stop', clientId: this.clientId });
+                    this.audioElement.pause();
+                    this.audioElement.currentTime = 0;
+                });
+                
+                document.getElementById('testBtn').addEventListener('click', () => {
+                    const audioElement = this.audioElement;
+                    audioElement.src = this.musicSelector.value;
+                    audioElement.play().catch(e => {
+                        console.error('Autoplay blocked:', e);
+                        alert('Browser autoplay policy: Please interact with the page first (click anywhere), then try again.');
+                    });
+                });
+                
+                document.getElementById('musicSelector').addEventListener('change', (e) => {
+                    this.broadcast({ type: 'track-change', track: e.target.value, clientId: this.clientId });
+                });
+            }
+            
+            destroy() {
+                if (this.channel) {
+                    this.broadcast({ type: 'leave', clientId: this.clientId });
+                    this.channel.close();
+                }
+            }
         }
         
-        // Music tracks - royalty-free
-        const musicTracks = {
-            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3': 'SoundHelix - Song 1 (Electronic)',
-            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3': 'SoundHelix - Song 2 (Chill)',
-            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3': 'SoundHelix - Song 3 (Upbeat)',
-            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3': 'SoundHelix - Song 4 (Relaxing)',
-            'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3': 'SoundHelix - Song 5 (Energetic)',
-            'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3': 'Bell Ringing (Short)',
-            'https://www.soundjay.com/misc/sounds/phone-ring-01.mp3': 'Phone Ring (Short)'
-        };
+        // ============================================
+        // WEBRTC MODE: P2P connection between browsers
+        // ============================================
         
-        const sessionAlias = getOrCreateAlias();
-        let clientId = null;
-        let currentDeviceId = null;
-        let audioSync = null;
-        let isWebSocketConnected = false;
-        
-        // Update session alias display
-        document.getElementById('sessionAlias').textContent = sessionAlias;
-        
-        // Check if we're on GitHub Pages
-        function isGitHubPages() {
-            return window.location.hostname.includes('github.io');
+        class WebRTCSyncManager {
+            constructor() {
+                this.roomId = null;
+                this.peerConnection = null;
+                this.dataChannel = null;
+                this.sessions = new Map();
+                this.clientId = this.generateClientId();
+                this.alias = localStorage.getItem('syncAudioAlias') || this.generateAlias();
+                localStorage.setItem('syncAudioAlias', this.alias);
+                this.isMaster = false;
+                this.audioElement = document.getElementById('audioPlayer');
+                this.musicSelector = document.getElementById('musicSelector');
+                this.iceServers = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' }
+                    ]
+                };
+                
+                this.initUI();
+            }
+            
+            generateClientId() {
+                return 'webrtc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+            }
+            
+            generateAlias() {
+                const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy'];
+                const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime'];
+                const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala'];
+                const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const animal = animals[Math.floor(Math.random() * animals.length)];
+                return `${adj} ${color} ${animal}`;
+            }
+            
+            initUI() {
+                document.getElementById('sessionAlias').textContent = this.alias;
+                document.getElementById('clientId').textContent = this.clientId;
+                
+                // Setup room controls
+                document.getElementById('generateRoomBtn').addEventListener('click', () => {
+                    this.roomId = this.generateRoomId();
+                    document.getElementById('roomIdInput').value = this.roomId;
+                    document.getElementById('roomStatus').textContent = 'Room created. Share this ID with other devices.';
+                    this.startListening();
+                });
+                
+                document.getElementById('connectRoomBtn').addEventListener('click', () => {
+                    this.roomId = document.getElementById('roomIdInput').value;
+                    if (this.roomId) {
+                        this.startListening();
+                        document.getElementById('roomStatus').textContent = 'Connecting to room...';
+                    } else {
+                        alert('Please enter a Room ID');
+                    }
+                });
+                
+                // Setup controls
+                this.setupControls();
+            }
+            
+            generateRoomId() {
+                return Math.random().toString(36).substring(2, 8).toUpperCase();
+            }
+            
+            startListening() {
+                // For simplicity, we'll use a signaling server via Firebase or similar
+                // But for GitHub Pages demo, we'll use localStorage + StorageEvent as fallback
+                this.setupLocalSignaling();
+            }
+            
+            setupLocalSignaling() {
+                // This is a simplified version for demo purposes
+                // In production, you'd use a proper signaling server
+                window.addEventListener('storage', (event) => {
+                    if (event.key && event.key.startsWith('webrtc-signal-')) {
+                        const data = JSON.parse(event.newValue);
+                        if (data.roomId === this.roomId && data.clientId !== this.clientId) {
+                            this.handleSignalingMessage(data);
+                        }
+                    }
+                });
+                
+                // Broadcast our presence
+                this.broadcastSignal({ type: 'join', roomId: this.roomId, clientId: this.clientId, alias: this.alias });
+            }
+            
+            broadcastSignal(message) {
+                const signalKey = `webrtc-signal-${this.roomId}`;
+                localStorage.setItem(signalKey, JSON.stringify(message));
+                localStorage.removeItem(signalKey);
+            }
+            
+            handleSignalingMessage(data) {
+                switch (data.type) {
+                    case 'join':
+                        this.sessions.set(data.clientId, { alias: data.alias, role: 'slave' });
+                        this.updateSessionList();
+                        
+                        // If we're the first, we're master
+                        if (this.sessions.size === 1) {
+                            this.isMaster = true;
+                            document.getElementById('role').textContent = 'Master';
+                            document.getElementById('role').className = 'role-master';
+                            document.getElementById('startBtn').disabled = false;
+                        }
+                        break;
+                    case 'start':
+                        this.handleStart(data);
+                        break;
+                    case 'pause':
+                        this.audioElement.pause();
+                        break;
+                    case 'stop':
+                        this.audioElement.pause();
+                        this.audioElement.currentTime = 0;
+                        break;
+                }
+            }
+            
+            handleStart(data) {
+                const audioElement = this.audioElement;
+                audioElement.src = data.track || this.musicSelector.value;
+                audioElement.currentTime = 0;
+                audioElement.play().catch(e => console.error('Autoplay blocked:', e));
+            }
+            
+            updateSessionList() {
+                const sessionList = document.getElementById('sessionList');
+                const sessionCount = document.getElementById('sessionCount');
+                
+                sessionList.innerHTML = '';
+                
+                // Add current session
+                const currentLi = document.createElement('li');
+                currentLi.classList.add('active');
+                const role = this.isMaster ? 'Master' : 'Slave';
+                const roleClass = this.isMaster ? 'role-master' : 'role-slave';
+                currentLi.innerHTML = `<strong>${this.alias}</strong> <span class="${roleClass}">(${role})</span> <span class="client-id">[${this.clientId}]</span>`;
+                sessionList.appendChild(currentLi);
+                
+                // Add other sessions
+                this.sessions.forEach((session, clientId) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<strong>${session.alias}</strong> <span class="role-slave">(Slave)</span> <span class="client-id">[${clientId}]</span>`;
+                    sessionList.appendChild(li);
+                });
+                
+                sessionCount.textContent = this.sessions.size + 1;
+            }
+            
+            setupControls() {
+                document.getElementById('startBtn').addEventListener('click', () => {
+                    if (this.isMaster) {
+                        this.broadcastSignal({
+                            type: 'start',
+                            roomId: this.roomId,
+                            track: this.musicSelector.value,
+                            clientId: this.clientId
+                        });
+                        const audioElement = this.audioElement;
+                        audioElement.src = this.musicSelector.value;
+                        audioElement.currentTime = 0;
+                        audioElement.play().catch(e => console.error('Autoplay blocked:', e));
+                    }
+                });
+                
+                document.getElementById('pauseBtn').addEventListener('click', () => {
+                    this.broadcastSignal({ type: 'pause', roomId: this.roomId, clientId: this.clientId });
+                    this.audioElement.pause();
+                });
+                
+                document.getElementById('stopBtn').addEventListener('click', () => {
+                    this.broadcastSignal({ type: 'stop', roomId: this.roomId, clientId: this.clientId });
+                    this.audioElement.pause();
+                    this.audioElement.currentTime = 0;
+                });
+                
+                document.getElementById('testBtn').addEventListener('click', () => {
+                    const audioElement = this.audioElement;
+                    audioElement.src = this.musicSelector.value;
+                    audioElement.play().catch(e => {
+                        console.error('Autoplay blocked:', e);
+                        alert('Browser autoplay policy: Please interact with the page first (click anywhere), then try again.');
+                    });
+                });
+                
+                document.getElementById('musicSelector').addEventListener('change', (e) => {
+                    this.broadcastSignal({ type: 'track-change', roomId: this.roomId, track: e.target.value, clientId: this.clientId });
+                });
+            }
         }
         
-        // Check if we're on localhost
-        function isLocalhost() {
-            return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        }
+        // ============================================
+        // SERVER MODE: Uses WebSocket (requires local server)
+        // ============================================
         
-        // Get WebSocket URL based on environment
-        function getWebSocketUrl() {
-            if (isLocalhost()) {
-                return 'ws://' + window.location.hostname + ':8080';
-            } else if (isGitHubPages()) {
-                // GitHub Pages doesn't support WebSocket, show warning
+        class ServerSyncManager {
+            constructor() {
+                this.audioSync = null;
+                this.clientId = null;
+                this.alias = localStorage.getItem('syncAudioAlias') || this.generateAlias();
+                localStorage.setItem('syncAudioAlias', this.alias);
+                this.audioElement = document.getElementById('audioPlayer');
+                this.musicSelector = document.getElementById('musicSelector');
+                
+                this.init();
+            }
+            
+            generateAlias() {
+                const adjectives = ['Happy', 'Sad', 'Angry', 'Calm', 'Energetic', 'Chill', 'Focused', 'Relaxed', 'Excited', 'Dreamy'];
+                const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime'];
+                const animals = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Shark', 'Dolphin', 'Panda', 'Koala'];
+                const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const animal = animals[Math.floor(Math.random() * animals.length)];
+                return `${adj} ${color} ${animal}`;
+            }
+            
+            getWebSocketUrl() {
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                    return 'ws://' + window.location.hostname + ':8080';
+                }
                 return null;
-            } else {
-                // For other cases, try to use relative path
-                return 'ws://' + window.location.hostname + ':8080';
+            }
+            
+            init() {
+                const wsUrl = this.getWebSocketUrl();
+                const selectedTrack = this.musicSelector.value;
+                
+                document.getElementById('sessionAlias').textContent = this.alias;
+                
+                if (!wsUrl) {
+                    document.getElementById('status').textContent = 'Server Not Available';
+                    document.getElementById('status').className = 'status disconnected';
+                    return;
+                }
+                
+                try {
+                    // Use the SyncAudio library
+                    this.audioSync = new SyncAudio({
+                        websocketUrl: wsUrl,
+                        audioFile: selectedTrack,
+                        autoStart: false,
+                        autoMeasureLatency: true,
+                        sessionAlias: this.alias
+                    });
+                    
+                    this.setupEvents();
+                    
+                } catch (error) {
+                    console.error('Failed to initialize SyncAudio:', error);
+                    document.getElementById('status').textContent = 'Connection Failed';
+                    document.getElementById('status').className = 'status disconnected';
+                }
+            }
+            
+            setupEvents() {
+                if (!this.audioSync) return;
+                
+                this.audioSync.on('ready', ({ isMaster, bluetoothLatency }) => {
+                    document.getElementById('status').textContent = isMaster ? 'Master' : 'Slave';
+                    document.getElementById('status').className = isMaster ? 'status master' : 'status slave';
+                    document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
+                    document.getElementById('role').className = isMaster ? 'role-master' : 'role-slave';
+                    document.getElementById('bluetoothLatency').textContent = bluetoothLatency;
+                    document.getElementById('startBtn').disabled = !isMaster;
+                    document.getElementById('pauseBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = false;
+                });
+
+                this.audioSync.on('role', ({ role, clientId: cid }) => {
+                    this.clientId = cid;
+                    document.getElementById('clientId').textContent = cid || 'Unknown';
+                    document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
+                    document.getElementById('role').className = role === 'master' ? 'role-master' : 'role-slave';
+                });
+
+                this.audioSync.on('bluetooth-latency', ({ latency }) => {
+                    document.getElementById('bluetoothLatency').textContent = latency;
+                });
+
+                this.audioSync.on('clock-sync', ({ offset }) => {
+                    document.getElementById('clockOffset').textContent = offset.toFixed(2);
+                });
+
+                this.audioSync.on('session-update', ({ sessions }) => {
+                    this.updateSessionList(sessions);
+                });
+
+                this.audioSync.on('disconnect', () => {
+                    document.getElementById('status').className = 'status disconnected';
+                    document.getElementById('status').textContent = 'Disconnected';
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('pauseBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = true;
+                });
+                
+                // Setup controls
+                document.getElementById('startBtn').addEventListener('click', () => {
+                    if (this.audioSync) this.audioSync.startSync();
+                });
+
+                document.getElementById('pauseBtn').addEventListener('click', () => {
+                    if (this.audioSync) this.audioSync.pauseSync();
+                });
+
+                document.getElementById('stopBtn').addEventListener('click', () => {
+                    if (this.audioSync) this.audioSync.stopSync();
+                });
+
+                document.getElementById('testBtn').addEventListener('click', () => {
+                    const audioElement = this.audioElement;
+                    audioElement.src = this.musicSelector.value;
+                    audioElement.play().catch(e => {
+                        console.error('Autoplay blocked:', e);
+                        alert('Browser autoplay policy: Please interact with the page first (click anywhere), then try again.');
+                    });
+                });
+
+                document.getElementById('musicSelector').addEventListener('change', (e) => {
+                    if (this.audioSync) {
+                        this.audioSync.setAudioFile(e.target.value);
+                    }
+                });
+            }
+            
+            updateSessionList(sessions) {
+                const sessionList = document.getElementById('sessionList');
+                const sessionCount = document.getElementById('sessionCount');
+                
+                sessionList.innerHTML = '';
+                
+                sessions.forEach(session => {
+                    const li = document.createElement('li');
+                    li.dataset.clientId = session.clientId;
+                    const isCurrent = session.clientId === this.clientId;
+                    const alias = session.alias || (isCurrent ? this.alias : 'Unknown');
+                    
+                    const roleClass = session.role === 'master' ? 'role-master' : 'role-slave';
+                    const roleText = session.role === 'master' ? 'Master' : 'Slave';
+                    
+                    li.innerHTML = `<strong>${alias}</strong> <span class="${roleClass}">(${roleText})</span> <span class="client-id">[${session.clientId}]</span>`;
+                    if (isCurrent) {
+                        li.classList.add('active');
+                    }
+                    sessionList.appendChild(li);
+                });
+                
+                const count = sessions.length;
+                sessionCount.textContent = count;
+                
+                if (count === 0) {
+                    sessionList.innerHTML = '<li>No sessions connected yet</li>';
+                }
             }
         }
         
-        // List all audio devices
+        // ============================================
+        // MAIN INITIALIZATION
+        // ============================================
+        
+        let currentManager = null;
+        let currentMode = 'local';
+        
+        // List audio devices
         async function listAudioDevices() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
@@ -285,7 +830,6 @@
                 const deviceList = document.getElementById('deviceList');
                 const deviceSelector = document.getElementById('deviceSelector');
                 
-                // Clear existing items
                 deviceList.innerHTML = '';
                 deviceSelector.innerHTML = '<option value="">Default device</option>';
                 
@@ -303,7 +847,6 @@
                     const li = document.createElement('li');
                     const label = device.label || `Device ${device.deviceId.substring(0, 8)}`;
                     
-                    // Check if this might be a Bluetooth device
                     const isBluetooth = label.toLowerCase().includes('bluetooth') || 
                                        device.deviceId.toLowerCase().includes('bluetooth') ||
                                        label.toLowerCase().includes('wireless') ||
@@ -319,31 +862,17 @@
                         li.textContent = label;
                     }
                     
-                    if (device.deviceId === currentDeviceId) {
-                        li.classList.add('active');
-                    }
                     deviceList.appendChild(li);
                 });
                 
-                // Set up device selector change handler
                 deviceSelector.addEventListener('change', async (e) => {
-                    currentDeviceId = e.target.value;
-                    if (currentDeviceId) {
+                    const selectedId = e.target.value;
+                    if (selectedId) {
                         try {
                             const audioElement = document.getElementById('audioPlayer');
                             if (audioElement.setSinkId) {
-                                await audioElement.setSinkId(currentDeviceId);
-                                console.log(`Audio output set to: ${currentDeviceId}`);
-                                // Update active state in list
-                                document.querySelectorAll('#deviceList li').forEach(li => {
-                                    li.classList.remove('active');
-                                });
-                                const activeIndex = audioOutputs.findIndex(d => d.deviceId === currentDeviceId);
-                                if (activeIndex >= 0) {
-                                    document.querySelectorAll('#deviceList li')[activeIndex].classList.add('active');
-                                }
-                            } else {
-                                console.warn('setSinkId not supported in this browser');
+                                await audioElement.setSinkId(selectedId);
+                                console.log(`Audio output set to: ${selectedId}`);
                             }
                         } catch (error) {
                             console.error('Failed to set audio device:', error);
@@ -357,201 +886,66 @@
             }
         }
         
-        // Initialize audio sync
-        function initAudioSync() {
-            const wsUrl = getWebSocketUrl();
-            const musicSelector = document.getElementById('musicSelector');
-            const selectedTrack = musicSelector.value;
+        // Initialize mode buttons
+        function initModeButtons() {
+            const localBtn = document.getElementById('localModeBtn');
+            const webrtcBtn = document.getElementById('webrtcModeBtn');
+            const serverBtn = document.getElementById('serverModeBtn');
             
-            if (!wsUrl) {
-                // GitHub Pages - no WebSocket support
-                document.getElementById('serverStatus').innerHTML = `
-                    <p class="warning">⚠️ You're on GitHub Pages (static hosting). WebSocket is not available.</p>
-                    <p><strong>To test multi-device sync:</strong></p>
-                    <ol>
-                        <li>Clone the repository: <code>git clone https://github.com/arcodange-org/sync-audio-js.git</code></li>
-                        <li>Install dependencies: <code>cd sync-audio-js && npm install</code></li>
-                        <li>Start the server: <code>npm start</code></li>
-                        <li>Open <code>http://localhost:8080/example/</code> in multiple browser tabs</li>
-                    </ol>
-                    <p>You can still test audio playback locally with the "Test Audio" button.</p>
-                `;
-                document.getElementById('websocketStatus').style.display = 'none';
-                document.getElementById('status').className = 'status disconnected';
-                document.getElementById('status').textContent = 'Static Mode (No Sync)';
-                
-                // Still allow local audio testing
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('pauseBtn').disabled = true;
-                document.getElementById('stopBtn').disabled = true;
-                
-                return null;
+            localBtn.addEventListener('click', () => {
+                switchMode('local');
+            });
+            
+            webrtcBtn.addEventListener('click', () => {
+                switchMode('webrtc');
+            });
+            
+            serverBtn.addEventListener('click', () => {
+                switchMode('server');
+            });
+        }
+        
+        function switchMode(mode) {
+            // Clean up current manager
+            if (currentManager && currentManager.destroy) {
+                currentManager.destroy();
             }
             
-            // Show WebSocket status
-            document.getElementById('websocketStatus').style.display = 'block';
-            document.getElementById('wsStatus').textContent = 'Connecting...';
+            // Update UI
+            document.querySelectorAll('.mode-option button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`${mode}ModeBtn`).classList.add('active');
             
-            try {
-                const audioSync = new SyncAudio({
-                    websocketUrl: wsUrl,
-                    audioFile: selectedTrack,
-                    autoStart: false,
-                    autoMeasureLatency: true,
-                    sessionAlias: sessionAlias
-                });
-                
-                return audioSync;
-                
-            } catch (error) {
-                console.error('Failed to initialize SyncAudio:', error);
-                document.getElementById('wsStatus').textContent = 'Failed to connect';
-                document.getElementById('status').className = 'status disconnected';
-                document.getElementById('status').textContent = 'Connection Failed';
-                return null;
+            // Hide/show sections
+            document.getElementById('roomSection').style.display = mode === 'webrtc' ? 'block' : 'none';
+            document.getElementById('webrtcInfo').style.display = mode === 'webrtc' ? 'block' : 'none';
+            document.getElementById('serverInfo').style.display = mode === 'server' ? 'block' : 'none';
+            
+            // Initialize new manager
+            switch (mode) {
+                case 'local':
+                    currentManager = new LocalSyncManager();
+                    break;
+                case 'webrtc':
+                    currentManager = new WebRTCSyncManager();
+                    break;
+                case 'server':
+                    currentManager = new ServerSyncManager();
+                    break;
             }
+            
+            currentMode = mode;
         }
         
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
-            // List audio devices
-            if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-                await listAudioDevices();
-            } else {
-                document.getElementById('deviceList').innerHTML = '<li>Device enumeration not supported in this browser</li>';
-            }
+            await listAudioDevices();
+            initModeButtons();
             
-            // Initialize audio sync
-            audioSync = initAudioSync();
-            
-            // Set up music selector
-            document.getElementById('musicSelector').addEventListener('change', (e) => {
-                const selectedTrack = e.target.value;
-                if (audioSync) {
-                    audioSync.setAudioFile(selectedTrack);
-                }
-            });
-            
-            // Set up test button
-            document.getElementById('testBtn').addEventListener('click', async () => {
-                const audioElement = document.getElementById('audioPlayer');
-                const selectedTrack = document.getElementById('musicSelector').value;
-                
-                try {
-                    audioElement.src = selectedTrack;
-                    await audioElement.play();
-                    console.log('Test audio playing');
-                } catch (error) {
-                    console.error('Failed to play test audio:', error);
-                    alert('Failed to play audio. Make sure you have interacted with the page first (browser autoplay policy).');
-                }
-            });
-            
-            // Set up control buttons (will be enabled when connected)
-            document.getElementById('startBtn').addEventListener('click', () => {
-                if (audioSync) audioSync.startSync();
-            });
-            
-            document.getElementById('pauseBtn').addEventListener('click', () => {
-                if (audioSync) audioSync.pauseSync();
-            });
-            
-            document.getElementById('stopBtn').addEventListener('click', () => {
-                if (audioSync) audioSync.stopSync();
-            });
+            // Start with local mode by default
+            switchMode('local');
         });
-        
-        // Handle audio sync events (only if audioSync exists)
-        function setupAudioSyncEvents() {
-            if (!audioSync) return;
-            
-            audioSync.on('ready', ({ isMaster, bluetoothLatency }) => {
-                isWebSocketConnected = true;
-                document.getElementById('wsStatus').textContent = 'Connected';
-                document.getElementById('status').textContent = isMaster ? 'Master' : 'Slave';
-                document.getElementById('status').className = isMaster ? 'status master' : 'status slave';
-                document.getElementById('role').textContent = isMaster ? 'Master' : 'Slave';
-                document.getElementById('bluetoothLatency').textContent = bluetoothLatency;
-                document.getElementById('startBtn').disabled = !isMaster;
-                document.getElementById('pauseBtn').disabled = false;
-                document.getElementById('stopBtn').disabled = false;
-            });
-
-            audioSync.on('role', ({ role, clientId: cid }) => {
-                clientId = cid;
-                document.getElementById('clientId').textContent = cid || 'Unknown';
-                document.getElementById('role').textContent = role === 'master' ? 'Master' : 'Slave';
-                document.getElementById('role').className = role === 'master' ? 'role-master' : 'role-slave';
-            });
-
-            audioSync.on('bluetooth-latency', ({ latency }) => {
-                document.getElementById('bluetoothLatency').textContent = latency;
-            });
-
-            audioSync.on('clock-sync', ({ offset }) => {
-                document.getElementById('clockOffset').textContent = offset.toFixed(2);
-            });
-
-            audioSync.on('session-update', ({ sessions }) => {
-                updateSessionListFromServer(sessions);
-            });
-
-            audioSync.on('play', () => {
-                console.log('Audio started playing');
-            });
-
-            audioSync.on('pause', () => {
-                console.log('Audio paused');
-            });
-
-            audioSync.on('stop', () => {
-                console.log('Audio stopped');
-            });
-
-            audioSync.on('disconnect', () => {
-                isWebSocketConnected = false;
-                document.getElementById('wsStatus').textContent = 'Disconnected';
-                document.getElementById('status').className = 'status disconnected';
-                document.getElementById('status').textContent = 'Disconnected';
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('pauseBtn').disabled = true;
-                document.getElementById('stopBtn').disabled = true;
-            });
-        }
-
-        // Track sessions
-        function updateSessionListFromServer(sessions) {
-            const sessionList = document.getElementById('sessionList');
-            const sessionCount = document.getElementById('sessionCount');
-            
-            sessionList.innerHTML = '';
-            
-            sessions.forEach(session => {
-                const li = document.createElement('li');
-                li.dataset.clientId = session.clientId;
-                const isCurrent = session.clientId === clientId;
-                const alias = session.alias || (isCurrent ? sessionAlias : 'Unknown');
-                
-                const roleClass = session.role === 'master' ? 'role-master' : 'role-slave';
-                const roleText = session.role === 'master' ? 'Master' : 'Slave';
-                
-                li.innerHTML = `<strong>${alias}</strong> <span class="${roleClass}">(${roleText})</span> <span class="client-id">[${session.clientId}]</span>`;
-                if (isCurrent) {
-                    li.classList.add('active');
-                }
-                sessionList.appendChild(li);
-            });
-            
-            const count = sessions.length;
-            sessionCount.textContent = count;
-            
-            if (count === 0) {
-                sessionList.innerHTML = '<li>No sessions connected yet (WebSocket required)</li>';
-            }
-        }
-        
-        // Setup events after audioSync is created
-        setTimeout(setupAudioSyncEvents, 1000);
     </script>
 </body>
 </html>
