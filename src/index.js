@@ -8,7 +8,7 @@ const DEFAULT_CONFIG = {
   // Mode: 'websocket' (server) or 'broadcast' (local)
   mode: 'websocket',
   websocketUrl: 'ws://localhost:8080',
-  broadcastChannel: 'sync-audio-local',
+  broadcastChannel: 'sync-audio-demo',
   audioFile: null,
   autoStart: false,
   autoMeasureLatency: true,
@@ -198,16 +198,48 @@ export class SyncAudio {
   _handleBroadcastMessage(data) {
     switch (data.type) {
       case 'join':
-        if (!this.isMaster && this.config.autoMaster) {
-          this.isMaster = true;
-          this._emit('role', { role: 'master', clientId: this.clientId });
+        // Don't add ourselves
+        if (data.clientId !== this.clientId) {
+          if (!this.isMaster && this.config.autoMaster) {
+            this.isMaster = true;
+            this._emit('role', { role: 'master', clientId: this.clientId });
+          }
+          this.sessions.set(data.clientId, { 
+            alias: data.alias, 
+            role: this.isMaster ? 'slave' : 'master',
+            clientId: data.clientId
+          });
+          this._emit('session-update', { sessions: Array.from(this.sessions.values()) });
         }
-        this.sessions.set(data.clientId, { 
-          alias: data.alias, 
-          role: this.isMaster ? 'slave' : 'master',
-          clientId: data.clientId
-        });
-        this._emit('session-update', { sessions: Array.from(this.sessions.values()) });
+        break;
+        
+      case 'request-sessions':
+        // Respond with our session info
+        if (data.clientId !== this.clientId) {
+          this._broadcast({
+            type: 'session-info',
+            clientId: this.clientId,
+            alias: this.config.sessionAlias || 'Unknown',
+            role: this.isMaster ? 'master' : 'slave'
+          });
+        }
+        break;
+        
+      case 'session-info':
+        // Add or update session info
+        if (data.clientId !== this.clientId) {
+          this.sessions.set(data.clientId, { 
+            alias: data.alias,
+            role: data.role,
+            clientId: data.clientId
+          });
+          // If someone else is master, we're slave
+          if (data.role === 'master' && this.isMaster) {
+            this.isMaster = false;
+            this._emit('role', { role: 'slave', clientId: this.clientId });
+          }
+          this._emit('session-update', { sessions: Array.from(this.sessions.values()) });
+        }
         break;
         
       case 'leave':
