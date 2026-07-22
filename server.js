@@ -102,6 +102,27 @@ wss.on('connection', (ws, req) => {
           info.alias = data.alias;
           broadcastSessionUpdate();
         }
+      } else if (data.type === 'seek' && ws === master) {
+        // Broadcast seek to all slaves
+        clients.forEach((info, client) => {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(data));
+          }
+        });
+      } else if (data.type === 'seeking' && ws === master) {
+        // Broadcast seeking state to all slaves
+        clients.forEach((info, client) => {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(data));
+          }
+        });
+      } else if (data.type === 'timeupdate' && ws === master) {
+        // Broadcast time updates to all slaves (throttled)
+        clients.forEach((info, client) => {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(data));
+          }
+        });
       }
     } catch (e) { console.error(`Error from ${clientId}:`, e); }
   });
