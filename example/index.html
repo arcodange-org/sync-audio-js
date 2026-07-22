@@ -64,6 +64,10 @@
             background-color: #d4edda;
             font-weight: bold;
         }
+        .device-list li.bluetooth, .session-list li.bluetooth {
+            background-color: #e7f3ff;
+            border-left: 3px solid #0066cc;
+        }
         .alias {
             font-weight: bold;
             color: #2c3e50;
@@ -80,6 +84,19 @@
         }
         .role-slave {
             color: #856404;
+        }
+        .bluetooth-icon {
+            color: #0066cc;
+            margin-right: 5px;
+        }
+        .warning {
+            color: #856404;
+            font-style: italic;
+            font-size: 0.9em;
+        }
+        .bluetooth-section {
+            border-color: #0066cc;
+            background-color: #f8f9ff;
         }
     </style>
 </head>
@@ -102,9 +119,22 @@
         </ul>
     </div>
     
-    <!-- Audio Devices -->
+    <!-- Bluetooth Devices -->
+    <div class="section bluetooth-section">
+        <h2>📡 Bluetooth Audio Devices</h2>
+        <p class="warning" id="bluetoothWarning">Bluetooth device detection requires permission. Click below to request access.</p>
+        <button id="requestBluetoothBtn" style="margin: 10px 0;">Request Bluetooth Access</button>
+        <select id="bluetoothDeviceSelector" style="width: 100%; padding: 8px; margin: 10px 0; display: none;">
+            <option value="">Select a Bluetooth device</option>
+        </select>
+        <ul id="bluetoothDeviceList" class="device-list">
+            <li>Bluetooth devices will appear here after granting permission</li>
+        </ul>
+    </div>
+    
+    <!-- All Audio Devices -->
     <div class="section">
-        <h2>Audio Output Devices</h2>
+        <h2>🔊 All Audio Output Devices</h2>
         <select id="deviceSelector" style="width: 100%; padding: 8px; margin: 10px 0;">
             <option value="">Default device</option>
         </select>
@@ -153,11 +183,17 @@
         const sessionAlias = getOrCreateAlias();
         let clientId = null;
         let currentDeviceId = null;
+        let bluetoothDevices = [];
         
         // Update session alias display
         document.getElementById('sessionAlias').textContent = sessionAlias;
         
-        // List audio devices
+        // Check if Bluetooth is available
+        function isBluetoothAvailable() {
+            return 'bluetooth' in navigator;
+        }
+        
+        // List all audio devices
         async function listAudioDevices() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
@@ -181,7 +217,19 @@
                     deviceSelector.appendChild(option);
                     
                     const li = document.createElement('li');
-                    li.textContent = device.label || `Device ${device.deviceId.substring(0, 8)}`;
+                    const label = device.label || `Device ${device.deviceId.substring(0, 8)}`;
+                    
+                    // Check if this might be a Bluetooth device (based on label)
+                    const isBluetooth = label.toLowerCase().includes('bluetooth') || 
+                                       device.deviceId.toLowerCase().includes('bluetooth');
+                    
+                    if (isBluetooth) {
+                        li.innerHTML = `<span class="bluetooth-icon">📡</span> ${label}`;
+                        li.classList.add('bluetooth');
+                    } else {
+                        li.textContent = label;
+                    }
+                    
                     if (device.deviceId === currentDeviceId) {
                         li.classList.add('active');
                     }
@@ -193,7 +241,6 @@
                     currentDeviceId = e.target.value;
                     if (currentDeviceId) {
                         try {
-                            // Try to set the sinkId if the browser supports it
                             const audioElement = document.getElementById('audioPlayer');
                             if (audioElement.setSinkId) {
                                 await audioElement.setSinkId(currentDeviceId);
@@ -221,6 +268,81 @@
             }
         }
         
+        // Request Bluetooth access and list Bluetooth devices
+        async function requestBluetoothAccess() {
+            const btn = document.getElementById('requestBluetoothBtn');
+            const warning = document.getElementById('bluetoothWarning');
+            const bluetoothSelector = document.getElementById('bluetoothDeviceSelector');
+            const bluetoothList = document.getElementById('bluetoothDeviceList');
+            
+            if (!isBluetoothAvailable()) {
+                warning.textContent = 'Bluetooth API is not available in this browser.';
+                btn.style.display = 'none';
+                return;
+            }
+            
+            try {
+                btn.disabled = true;
+                btn.textContent = 'Requesting...';
+                
+                // Request Bluetooth device
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: ['a2dp_sink', 'audio_sink']
+                });
+                
+                console.log('Bluetooth device selected:', device);
+                
+                // For now, we can only get one device at a time with requestDevice
+                // So we'll add it to our list
+                bluetoothDevices = [device];
+                
+                // Update UI
+                warning.style.display = 'none';
+                btn.style.display = 'none';
+                bluetoothSelector.style.display = 'block';
+                
+                // Add to selector
+                const option = document.createElement('option');
+                option.value = device.id || device.deviceId;
+                option.textContent = device.name || `Bluetooth Device ${device.id.substring(0, 8)}`;
+                bluetoothSelector.appendChild(option);
+                
+                // Add to list
+                bluetoothList.innerHTML = '';
+                const li = document.createElement('li');
+                li.classList.add('bluetooth');
+                li.innerHTML = `<span class="bluetooth-icon">📡</span> ${device.name || device.id} <span class="client-id">[${device.id.substring(0, 8)}]</span>`;
+                bluetoothList.appendChild(li);
+                
+                // Set up selector change
+                bluetoothSelector.addEventListener('change', async (e) => {
+                    const selectedId = e.target.value;
+                    if (selectedId) {
+                        try {
+                            const audioElement = document.getElementById('audioPlayer');
+                            if (audioElement.setSinkId) {
+                                await audioElement.setSinkId(selectedId);
+                                console.log(`Bluetooth audio set to: ${selectedId}`);
+                            }
+                        } catch (error) {
+                            console.error('Failed to set Bluetooth device:', error);
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Bluetooth request failed:', error);
+                btn.disabled = false;
+                btn.textContent = 'Request Bluetooth Access';
+                if (error.name === 'NotAllowedError') {
+                    warning.textContent = 'Bluetooth access was denied. Please allow Bluetooth access to see devices.';
+                } else {
+                    warning.textContent = `Error: ${error.message}`;
+                }
+            }
+        }
+        
         // Check for setSinkId support
         async function checkSinkIdSupport() {
             const audioElement = document.getElementById('audioPlayer');
@@ -229,13 +351,24 @@
             }
         }
         
-        // Initialize device listing when page loads
-        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-            listAudioDevices();
-            checkSinkIdSupport();
-        } else {
-            document.getElementById('deviceList').innerHTML = '<li>Device enumeration not supported in this browser</li>';
-        }
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check Bluetooth availability
+            if (!isBluetoothAvailable()) {
+                document.getElementById('requestBluetoothBtn').style.display = 'none';
+                document.getElementById('bluetoothWarning').textContent = 'Bluetooth API not available in this browser.';
+            } else {
+                document.getElementById('requestBluetoothBtn').addEventListener('click', requestBluetoothAccess);
+            }
+            
+            // List regular audio devices
+            if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                listAudioDevices();
+                checkSinkIdSupport();
+            } else {
+                document.getElementById('deviceList').innerHTML = '<li>Device enumeration not supported in this browser</li>';
+            }
+        });
         
         const audioSync = new SyncAudio({
             websocketUrl: 'ws://' + window.location.hostname + ':8080',
@@ -291,7 +424,6 @@
             const sessionList = document.getElementById('sessionList');
             const sessionCount = document.getElementById('sessionCount');
             
-            // Clear and rebuild the list
             sessionList.innerHTML = '';
             
             sessions.forEach(session => {
@@ -310,7 +442,6 @@
                 sessionList.appendChild(li);
             });
             
-            // Update count
             const count = sessions.length;
             sessionCount.textContent = count;
             
