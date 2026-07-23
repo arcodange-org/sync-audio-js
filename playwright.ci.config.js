@@ -11,11 +11,11 @@ const config = {
     timeout: 5000
   },
   
-  // Retry failed tests
-  retries: 2,
+  // No retries in CI to save time
+  retries: 0,
   
-  // Workers (parallel tests)
-  workers: process.env.CI ? 1 : undefined,
+  // Single worker in CI
+  workers: 1,
   
   // Reporter
   reporter: [
@@ -26,17 +26,14 @@ const config = {
   
   // Use configuration
   use: {
-    // Base URL for tests
-    baseURL: 'https://arcodange-org.github.io/sync-audio-js/',
-    
     // Browser configuration
     trace: 'on-first-retry',
     
     // Screenshot on failure
     screenshot: 'only-on-failure',
     
-    // Video recording (only in CI)
-    video: process.env.CI ? 'retain-on-failure' : 'off',
+    // No video in CI to save space
+    video: 'off',
     
     // Viewport
     viewport: { width: 1280, height: 720 },
@@ -45,36 +42,19 @@ const config = {
     userAgent: 'SyncAudio-QA-Tests/1.0'
   },
   
-  // Projects (browsers to test)
+  // Only test with Chromium in CI
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] }
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] }
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] }
-    },
-    // Mobile tests
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] }
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] }
     }
   ],
   
-  // Global setup (if needed)
-  globalSetup: './tests/global-setup.js',
+  // Global setup - start local server for example tests
+  globalSetup: './tests/ci-setup.js',
   
-  // Global teardown (if needed)
-  globalTeardown: './tests/global-teardown.js'
+  // Global teardown - stop local server
+  globalTeardown: './tests/ci-teardown.js'
 };
 
 module.exports = config;

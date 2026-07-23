@@ -38,11 +38,25 @@ jobs:
       - name: Build library
         run: npm run build
 
-      - name: Run Playwright tests
-        run: npx playwright test
+      - name: Start local server for example tests
+        run: |
+          node server.js &
+          sleep 5
+          echo "Server started on port 8080"
         env:
-          # Use GitHub Pages URL for tests
+          PORT: 8080
+
+      - name: Run Playwright tests
+        run: npx playwright test --config=playwright.ci.config.js
+        env:
+          # Use local server for example tests
+          EXAMPLE_URL: http://localhost:8080/example/index.html
+          # Use GitHub Pages URL for QA tests
           PLAYWRIGHT_BASE_URL: https://arcodange-org.github.io/sync-audio-js/
+
+      - name: Stop local server
+        if: always()
+        run: pkill -f "node server.js" || true
 
       - name: Upload test results
         if: always()

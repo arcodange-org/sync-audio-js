@@ -6,15 +6,21 @@
 const { test, expect } = require('@playwright/test');
 
 // Configuration
-const GITHUB_PAGES_URL = 'https://arcodange-org.github.io/sync-audio-js/';
+const GITHUB_PAGES_URL = process.env.PLAYWRIGHT_BASE_URL || 'https://arcodange-org.github.io/sync-audio-js/';
 const LOCAL_SERVER_URL = 'http://localhost:8080';
 const TEST_AUDIO_URL = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+
+// Check if we're testing against GitHub Pages or local server
+const isGitHubPages = GITHUB_PAGES_URL.includes('github.io');
 
 /**
  * Test Suite 1: GitHub Pages Deployment
  * Verifies that the static site is properly deployed
  */
 test.describe('GitHub Pages Deployment', () => {
+  // Skip GitHub Pages tests if we're not testing against GitHub Pages
+  test.skip(!isGitHubPages, 'Skipping GitHub Pages tests - not testing against github.io');
+  
   test.beforeEach(async ({ page }) => {
     // Navigate to GitHub Pages
     await page.goto(GITHUB_PAGES_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -180,14 +186,16 @@ test.describe('Library Functionality', () => {
  * Tests with the local server (if running)
  */
 test.describe('Local Server Tests', () => {
-  test.skip('Local server responds', async ({ page }) => {
-    // Skip by default, unskip to test locally
+  // Only run if we have a local server
+  test.skip(!LOCAL_SERVER_URL.includes('localhost'), 'Skipping local server tests');
+
+  test('Local server responds', async ({ page }) => {
     await page.goto(LOCAL_SERVER_URL, { timeout: 5000 });
     await expect(page).toHaveTitle(/SyncAudio/);
   });
 
-  test.skip('Local server serves audio file', async ({ page }) => {
-    const response = await page.request.get(LOCAL_SERVER_URL);
+  test('Local server serves example page', async ({ page }) => {
+    const response = await page.request.get(LOCAL_SERVER_URL + '/example/index.html');
     expect(response.ok()).toBeTruthy();
   });
 });
@@ -196,6 +204,9 @@ test.describe('Local Server Tests', () => {
  * Test Suite 4: Accessibility Tests
  */
 test.describe('Accessibility', () => {
+  // Skip if we're not testing against GitHub Pages
+  test.skip(!isGitHubPages, 'Skipping accessibility tests - not testing against github.io');
+  
   test.beforeEach(async ({ page }) => {
     await page.goto(GITHUB_PAGES_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
   });
@@ -235,6 +246,9 @@ test.describe('Accessibility', () => {
  * Test Suite 5: Performance Tests
  */
 test.describe('Performance', () => {
+  // Skip if we're not testing against GitHub Pages
+  test.skip(!isGitHubPages, 'Skipping performance tests - not testing against github.io');
+
   test('Page loads within acceptable time', async ({ page }) => {
     const startTime = Date.now();
     await page.goto(GITHUB_PAGES_URL, { waitUntil: 'domcontentloaded' });
@@ -257,6 +271,9 @@ test.describe('Performance', () => {
  * Test Suite 6: Error Handling
  */
 test.describe('Error Handling', () => {
+  // Skip if we're not testing against GitHub Pages
+  test.skip(!isGitHubPages, 'Skipping error handling tests - not testing against github.io');
+
   test.beforeEach(async ({ page }) => {
     await page.goto(GITHUB_PAGES_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
   });

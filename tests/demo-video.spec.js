@@ -19,37 +19,36 @@ const VIDEO_SIZE = { width: 1280, height: 720 };
  * 
  * The video will be saved in: test-results/demo-video-chromium/video.webm
  */
-test.describe('SyncAudio Demo Video', () => {
-  // Use a single browser for the demo
-  test.use({ 
-    viewport: VIDEO_SIZE,
-    video: 'retain-on-failure',
-    trace: 'off'
-  });
+test.use({ 
+  viewport: VIDEO_SIZE,
+  video: 'retain-on-failure',
+  trace: 'off'
+});
 
+test.describe('SyncAudio Demo Video', () => {
   test('Record SyncAudio demo walkthrough', async ({ page, browserName }) => {
-    console.log(`🎥 Starting demo video recording with ${browserName}...`);
+    console.log(`\ud83c\udfa5 Starting demo video recording with ${browserName}...`);
     
     // Step 1: Navigate to the demo page
-    console.log('📄 Step 1: Loading demo page...');
+    console.log('\ud83d\udcc4 Step 1: Loading demo page...');
     await page.goto(DEMO_URL, { waitUntil: 'networkidle', timeout: 30000 });
     await expect(page).toHaveTitle(/SyncAudio/);
     await page.waitForTimeout(1000); // Pause for visual effect
     
     // Step 2: Scroll to show the features section
-    console.log('✨ Step 2: Showing features...');
+    console.log('\u2728 Step 2: Showing features...');
     const featuresSection = page.locator('.features');
     await featuresSection.scrollIntoViewIfNeeded();
     await page.waitForTimeout(2000);
     
     // Step 3: Scroll to demo section
-    console.log('🎯 Step 3: Scrolling to demo section...');
+    console.log('\ud83c\udfaf Step 3: Scrolling to demo section...');
     const demoSection = page.locator('.demo-section');
     await demoSection.scrollIntoViewIfNeeded({ behavior: 'smooth' });
     await page.waitForTimeout(1500);
     
     // Step 4: Highlight the demo panels
-    console.log('📱 Step 4: Highlighting demo panels...');
+    console.log('\ud83d\udcf1 Step 4: Highlighting demo panels...');
     const panel1 = page.locator('.demo-panel').first();
     const panel2 = page.locator('.demo-panel').nth(1);
     
@@ -78,7 +77,7 @@ test.describe('SyncAudio Demo Video', () => {
     });
     
     // Step 5: Show the controls
-    console.log('🎛️ Step 5: Showing control buttons...');
+    console.log('\ud83c\udf9b\ufe0f Step 5: Showing control buttons...');
     const startBtn1 = page.locator('#startBtn1');
     await startBtn1.scrollIntoViewIfNeeded();
     await page.waitForTimeout(1000);
@@ -97,35 +96,35 @@ test.describe('SyncAudio Demo Video', () => {
     });
     
     // Step 6: Show audio players
-    console.log('🔊 Step 6: Showing audio players...');
+    console.log('\ud83d\udd0a Step 6: Showing audio players...');
     const audio1 = page.locator('#audioPlayer1');
     await audio1.scrollIntoViewIfNeeded();
     await page.waitForTimeout(1500);
     
     // Step 7: Scroll to usage section
-    console.log('📚 Step 7: Showing usage documentation...');
+    console.log('\ud83d\udcda Step 7: Showing usage documentation...');
     const usageSection = page.locator('section:has-text("Usage")');
     await usageSection.scrollIntoViewIfNeeded({ behavior: 'smooth' });
     await page.waitForTimeout(2000);
     
     // Step 8: Scroll to features
-    console.log('🌟 Step 8: Showing all features...');
+    console.log('\ud83c\udf1f Step 8: Showing all features...');
     await page.locator('.features').scrollIntoViewIfNeeded({ behavior: 'smooth' });
     await page.waitForTimeout(2000);
     
     // Step 9: Scroll back to top
-    console.log('🔝 Step 9: Scrolling back to top...');
+    console.log('\ud83d\udd1d Step 9: Scrolling back to top...');
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
     await page.waitForTimeout(1500);
     
     // Step 10: Show footer
-    console.log('📜 Step 10: Showing footer...');
+    console.log('\ud83d\udcdc Step 10: Showing footer...');
     const footer = page.locator('footer');
     await footer.scrollIntoViewIfNeeded({ behavior: 'smooth' });
     await page.waitForTimeout(2000);
     
-    console.log('✅ Demo video recording complete!');
-    console.log(`🎬 Video saved to: test-results/demo-video-${browserName}/video.webm`);
+    console.log('\u2705 Demo video recording complete!');
+    console.log(`\ud83c\udfac Video saved to: test-results/demo-video-${browserName}/video.webm`);
   });
 });
 
@@ -133,12 +132,12 @@ test.describe('SyncAudio Demo Video', () => {
  * Alternative: Create a screenshot showcase
  * This creates multiple screenshots that can be used in documentation
  */
-test.describe('SyncAudio Screenshot Showcase', () => {
-  test.use({ 
-    viewport: { width: 1920, height: 1080 },
-    screenshot: 'only-on-failure'
-  });
+test.use({ 
+  viewport: { width: 1920, height: 1080 },
+  screenshot: 'only-on-failure'
+});
 
+test.describe('SyncAudio Screenshot Showcase', () => {
   test('Capture hero section screenshot', async ({ page }) => {
     await page.goto(DEMO_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
@@ -194,12 +193,12 @@ test.describe('SyncAudio Screenshot Showcase', () => {
  * Create a GIF-like video by taking multiple screenshots
  * This can be used to create an animated demo
  */
-test.describe('Create Demo GIF Frames', () => {
-  test.use({ 
-    viewport: { width: 800, height: 600 },
-    screenshot: 'on'
-  });
+test.use({ 
+  viewport: { width: 800, height: 600 },
+  screenshot: 'on'
+});
 
+test.describe('Create Demo GIF Frames', () => {
   test('Capture demo interaction frames', async ({ page }) => {
     await page.goto(DEMO_URL, { waitUntil: 'networkidle' });
     
@@ -243,7 +242,7 @@ test.describe('Create Demo GIF Frames', () => {
     await page.locator('#startBtn1').scrollIntoViewIfNeeded();
     await page.screenshot({ path: 'gif-frames/frame-006-controls.png' });
     
-    console.log('📸 GIF frames captured!');
-    console.log('💡 To create GIF: ffmpeg -framerate 1 -i gif-frames/frame-%03d.png -c:v gif -loop 0 demo.gif');
+    console.log('\ud83d\udcf8 GIF frames captured!');
+    console.log('\ud83d\udca1 To create GIF: ffmpeg -framerate 1 -i gif-frames/frame-%03d.png -c:v gif -loop 0 demo.gif');
   });
 });
